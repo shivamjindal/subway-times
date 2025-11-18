@@ -86,7 +86,7 @@ export function parseGTFSFeed(
                 stopId: stopTimeUpdate.stopId || targetStopIds[0],
                 arrivalTime: arrivalTimeSeconds,
                 arrivalTimeSeconds: arrivalTimeSeconds - now,
-                destination: trip.tripHeadsign || (routeId === 'F' ? 'Manhattan' : 'Queens'),
+                destination: routeId === 'F' ? 'Manhattan' : 'Queens',
                 trainId: tripUpdate.vehicle?.label || undefined,
               });
             }
