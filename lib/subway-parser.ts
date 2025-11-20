@@ -21,7 +21,6 @@ export interface ServiceAlert {
 // Stop IDs for 7th Ave Brooklyn station
 // F train: F24N (Manhattan-bound/Northbound)
 // G train: F24N (Queens-bound/Northbound) - G train shares the same station
-// Note: In GTFS static data, Queens-bound G trains use F24N, but real-time feed may vary
 const TARGET_STOP_IDS = {
   F: ['F24N'], // 7th Ave Brooklyn, Manhattan-bound
   G: ['F24N'], // 7th Ave Brooklyn, Queens-bound (northbound)
