@@ -6,9 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatArrivalTime, formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
-import { AlertCircle, Moon, Sun } from 'lucide-react';
-import { useTheme } from 'next-themes';
-import { Switch } from '@/components/ui/switch';
+import { AlertCircle } from 'lucide-react';
 
 interface SubwayTimesData {
   arrivals: TrainArrival[];
@@ -21,8 +19,6 @@ export function SubwayTimesDisplay() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
 
   const fetchData = async (showRefreshing = false) => {
     try {
@@ -52,10 +48,6 @@ export function SubwayTimesDisplay() {
       setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     fetchData();
@@ -108,31 +100,18 @@ export function SubwayTimesDisplay() {
     <div className="container mx-auto p-4 max-w-2xl">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                7th Ave (Brooklyn)
-                <Badge className="bg-[#FF6319] text-white hover:bg-[#FF6319]/90">
-                  F
-                </Badge>
-                <Badge className="bg-[#6CBE45] text-white hover:bg-[#6CBE45]/90">
-                  G
-                </Badge>
-              </CardTitle>
-              <CardDescription className="mt-1">
-                Next Trains
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Sun className="h-4 w-4 text-muted-foreground" />
-              <Switch
-                checked={mounted && theme === 'dark'}
-                onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-                aria-label="Toggle dark mode"
-              />
-              <Moon className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            7th Ave (Brooklyn)
+            <Badge className="bg-[#FF6319] text-white hover:bg-[#FF6319]/90">
+              F
+            </Badge>
+            <Badge className="bg-[#6CBE45] text-white hover:bg-[#6CBE45]/90">
+              G
+            </Badge>
+          </CardTitle>
+          <CardDescription className="mt-1">
+            Next Trains
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Service Alerts */}
