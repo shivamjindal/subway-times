@@ -98,9 +98,10 @@ export function SubwayTimesDisplay() {
 
   return (
     <div className="container mx-auto p-4 max-w-2xl">
-      <Card>
+      <Card className="border-2 shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-2xl">
+            <span className="text-3xl" role="img" aria-label="thanksgiving">🦃</span>
             7th Ave (Brooklyn)
             <Badge className="bg-[#FF6319] text-white hover:bg-[#FF6319]/90">
               F
@@ -108,9 +109,10 @@ export function SubwayTimesDisplay() {
             <Badge className="bg-[#6CBE45] text-white hover:bg-[#6CBE45]/90">
               G
             </Badge>
+            <span className="text-3xl" role="img" aria-label="autumn">🍂</span>
           </CardTitle>
-          <CardDescription className="mt-1">
-            Next Trains
+          <CardDescription className="mt-1 text-base">
+            Next Trains • Happy Thanksgiving! 🍁
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
