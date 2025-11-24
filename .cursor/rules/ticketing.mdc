@@ -1,0 +1,8 @@
+---
+description: Use this rule when working on any Linear tickets
+alwaysApply: false
+---
+- Always use DEMO-{TICKET NO.}
+- Review specifically any tickets in the MTA Tracker Project. Never tell me anything to do with any other project
+- When implementing or working on a ticket, mark it in progress
+- When done working on a ticket, mark it as Done
