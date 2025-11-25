@@ -1,0 +1,142 @@
+---
+description: Use this rule when working with MTA subway route/station data, GTFS mappings, or building features that need train line or station information
+globs:
+  - lib/subway-data.ts
+  - lib/gtfs-mappings.ts
+  - lib/*.json
+  - "**/subway*"
+  - "**/station*"
+  - "**/route*"
+---
+
+# MTA Subway Data Utility
+
+This project includes comprehensive mappings of MTA NYC subway routes and stations, parsed from GTFS static data.
+
+## Key Files
+
+- `lib/subway-data.ts` - Main utility module with helper functions (use this!)
+- `lib/gtfs-mappings.ts` - Script to regenerate JSON mappings from GTFS data
+- `lib/route-to-stations.json` - Full route→stations mapping
+- `lib/station-to-routes.json` - Full station→routes mapping
+- `lib/simple-route-to-stations.json` - Simple route_id→[stop_ids] lookup
+- `lib/simple-station-to-routes.json` - Simple stop_id→[route_ids] lookup
+- `gtfs_subway/` - Raw GTFS static data files
+
+## Data Available
+
+- **29 routes**: 1-7, A-G, J, L, M, N, Q, R, W, Z, GS/FS/H shuttles, SIR
+- **496 stations**: Parent stations with stopId, name, lat/lon
+- **Directional data**: Northbound and southbound routes/stations separately
+
+## How to Use
+
+### Import the utility module
+
+```typescript
+import {
+  // Route lookups
+  getAllRoutes,
+  getRoute,
+  getStationsForRoute,
+  getNorthboundStationsForRoute,
+  getSouthboundStationsForRoute,
+  
+  // Station lookups  
+  getAllStations,
+  getStation,
+  getRoutesForStation,
+  getNorthboundRoutesForStation,
+  getSouthboundRoutesForStation,
+  
+  // Search & discovery
+  searchStationsByName,
+  getStationsByName,
+  getAllRoutesAtStationComplex,
+  findNearbyStations,
+  
+  // Display helpers
+  getRouteColor,
+  getRouteDisplayName,
+  ROUTE_LINE_COLORS,
+  
+  // Raw data access
+  routeToStations,
+  stationToRoutes,
+} from '@/lib/subway-data';
+```
+
+### Common Patterns
+
+#### Get all stations for a train line
+```typescript
+const aTrainStations = getStationsForRoute('A');
+// Returns: Station[] with 66 stations
+```
+
+#### Get all routes at a station
+```typescript
+const routes = getRoutesForStation('127'); // Times Sq 1/2/3 platform
+// Returns: Route[] for that specific platform
+
+// To get ALL routes at a station complex (all platforms):
+const allRoutes = getAllRoutesAtStationComplex('Times Sq-42 St');
+// Returns: 1, 2, 3, 7, 7X, N, Q, R, S, W
+```
+
+#### Search stations by name
+```typescript
+const results = searchStationsByName('grand central');
+// Returns all stations matching (case-insensitive partial match)
+```
+
+#### Find nearby stations
+```typescript
+const nearby = findNearbyStations(40.7128, -74.0060, 0.5); // lat, lon, radiusKm
+// Returns stations within 0.5km
+```
+
+#### Get route color for styling
+```typescript
+const color = getRouteColor('A'); // Returns "0062CF" (blue)
+const displayName = getRouteDisplayName('GS'); // Returns "S"
+```
+
+## Types
+
+```typescript
+interface Station {
+  stopId: string;    // e.g., "127", "A24"
+  name: string;      // e.g., "Times Sq-42 St"
+  lat: number;
+  lon: number;
+}
+
+interface Route {
+  routeId: string;   // e.g., "A", "1", "GS"
+  shortName: string; // e.g., "A", "1", "S"
+  longName: string;  // e.g., "8 Avenue Express"
+  color: string;     // Hex color without #, e.g., "0062CF"
+  textColor: string; // Text color for contrast
+}
+```
+
+## Important Notes
+
+1. **Station IDs are platform-specific**: The same station complex (e.g., Times Sq) has multiple stop_ids for different train lines. Use `getAllRoutesAtStationComplex(name)` to aggregate.
+
+2. **Direction suffixes**: In real-time feeds, stops have N/S suffix (e.g., "127N", "127S"). The mappings use parent station IDs without suffix.
+
+3. **Shuttle routes**: GS = 42 St Shuttle, FS = Franklin Ave Shuttle, H = Rockaway Shuttle. All display as "S".
+
+4. **Route colors**: Use `ROUTE_LINE_COLORS` constant or `getRouteColor()` for consistent MTA branding colors.
+
+## Regenerating Mappings
+
+If GTFS data in `gtfs_subway/` is updated:
+
+```bash
+npx tsx lib/gtfs-mappings.ts
+```
+
+This regenerates all JSON files in `lib/`.
