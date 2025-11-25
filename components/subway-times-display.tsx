@@ -63,8 +63,11 @@ export function SubwayTimesDisplay() {
   if (loading) {
     return (
       <div className="container mx-auto p-4 max-w-2xl">
-        <Card>
-          <CardHeader>
+        <Card className="border-2 border-primary/20 shadow-lg">
+          <CardHeader className="relative">
+            <div className="absolute top-2 right-2 text-2xl opacity-50">
+              🍂
+            </div>
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-48" />
           </CardHeader>
@@ -98,8 +101,11 @@ export function SubwayTimesDisplay() {
 
   return (
     <div className="container mx-auto p-4 max-w-2xl">
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-primary/20 shadow-lg">
+        <CardHeader className="relative">
+          <div className="absolute top-2 right-2 text-2xl opacity-50">
+            🍂
+          </div>
           <CardTitle className="flex items-center gap-2">
             7th Ave (Brooklyn)
             <Badge className="bg-[#FF6319] text-white hover:bg-[#FF6319]/90">
@@ -145,7 +151,7 @@ export function SubwayTimesDisplay() {
                 return (
                   <div
                     key={`${arrival.tripId}-${index}`}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-4 border border-primary/20 rounded-lg hover:bg-accent/10 transition-colors shadow-sm"
                   >
                     <div className="flex items-center gap-3">
                       <Badge className={`${badgeColor} text-lg px-3 py-1`}>
