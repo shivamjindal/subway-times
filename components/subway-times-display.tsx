@@ -79,26 +79,25 @@ export function SubwayTimesDisplay() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const hasDataRef = useRef(false);
+  const dataRef = useRef<SubwayTimesData | null>(null);
 
   // Load stations from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setStationConfigs(parsed);
-        } else {
-          // Default to F24 for backward compatibility
-          setStationConfigs([{ stationId: 'F24', direction: 'all' }]);
-        }
+      if (!saved) {
+        return;
+      }
+
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setStationConfigs(parsed);
       } else {
-        // Default to F24 for backward compatibility
-        setStationConfigs([{ stationId: 'F24', direction: 'all' }]);
+        localStorage.removeItem(STORAGE_KEY);
       }
     } catch (err) {
       console.error('Error loading stations from localStorage:', err);
-      setStationConfigs([{ stationId: 'F24', direction: 'all' }]);
+      localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
 
@@ -128,15 +127,29 @@ export function SubwayTimesDisplay() {
   // Use a ref to always access the latest selectedStationIds without causing re-renders
   const selectedStationIdsRef = useRef(selectedStationIds);
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:129',message:'Ref update useEffect triggered',data:{oldRefValue:JSON.stringify(selectedStationIdsRef.current),newValue:JSON.stringify(selectedStationIds)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     selectedStationIdsRef.current = selectedStationIds;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:131',message:'Ref updated',data:{refValueAfterUpdate:JSON.stringify(selectedStationIdsRef.current)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
   }, [selectedStationIds]);
 
   const fetchData = useCallback(async (showRefreshing = false) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:133',message:'fetchData called',data:{showRefreshing,selectedStationIdsKey,refValue:JSON.stringify(selectedStationIdsRef.current),selectedStationIds:JSON.stringify(selectedStationIds)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     // Use ref to get current station IDs without making fetchData depend on order changes
     const currentStationIds = selectedStationIdsRef.current;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:136',message:'currentStationIds from ref',data:{currentStationIds:JSON.stringify(currentStationIds),length:currentStationIds.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     
     if (currentStationIds.length === 0) {
-      setData({ arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) });
+      const emptyData = { arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) };
+      setData(emptyData);
+      dataRef.current = emptyData;
       setError(null);
       setRefreshing(false);
       setLoading(false);
@@ -146,31 +159,44 @@ export function SubwayTimesDisplay() {
 
     try {
       // If we already have data, use refreshing state instead of loading to avoid blanking the page
-      const shouldShowRefreshing = showRefreshing || hasDataRef.current;
+      // Use ref to check current data state to avoid stale closures
+      const hasExistingData = dataRef.current !== null && dataRef.current.arrivals.length > 0;
+      const shouldShowRefreshing = showRefreshing || hasExistingData || hasDataRef.current;
       if (shouldShowRefreshing) {
         setRefreshing(true);
+        // Ensure loading is false when refreshing to prevent skeleton from showing
+        setLoading(false);
       } else {
         setLoading(true);
+        setRefreshing(false);
       }
       setError(null);
 
       const stationsParam = currentStationIds.join(',');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:157',message:'About to fetch API',data:{stationsParam,requestedStationIds:JSON.stringify(currentStationIds)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       const response = await fetch(`/api/subway-times?stations=${stationsParam}`);
       if (!response.ok) {
         throw new Error('Failed to fetch subway times');
       }
 
       const result = await response.json();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:164',message:'API response received',data:{requestedStations:JSON.stringify(currentStationIds),arrivalsCount:result.arrivals?.length||0,arrivalsByStation:Object.keys((result.arrivals||[]).reduce((acc:Record<string,number>,arr:any)=>{acc[arr.stationId]=(acc[arr.stationId]||0)+1;return acc;},{})),allStationIdsInResponse:JSON.stringify([...new Set((result.arrivals||[]).map((a:any)=>a.stationId))])},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       
       if (result.error) {
         throw new Error(result.message || 'Failed to fetch subway times');
       }
 
       setData(result);
+      dataRef.current = result;
       hasDataRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       hasDataRef.current = false;
+      // Don't clear dataRef on error - keep existing data visible
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -178,9 +204,10 @@ export function SubwayTimesDisplay() {
   }, [selectedStationIdsKey]); // Only recreate when actual station IDs change, not order
 
   useEffect(() => {
-    if (selectedStationIds.length > 0) {
-      fetchData();
-    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:180',message:'Fetch useEffect triggered',data:{selectedStationIdsKey,selectedStationIdsLength:selectedStationIds.length,selectedStationIds:JSON.stringify(selectedStationIds),refValue:JSON.stringify(selectedStationIdsRef.current)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStationIdsKey, selectedStationIds.length]);
   // Note: fetchData is intentionally excluded from deps to avoid re-fetching on reorder
@@ -265,11 +292,17 @@ export function SubwayTimesDisplay() {
   };
 
   const handleStationsChange = (stationIds: string[]) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:265',message:'handleStationsChange called',data:{newStationIds:JSON.stringify(stationIds),currentStationConfigs:JSON.stringify(stationConfigs.map(c=>c.stationId))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // Add new stations with default direction 'all'
     const newConfigs: StationConfig[] = stationIds.map(id => {
       const existing = stationConfigs.find(c => c.stationId === id);
       return existing || { stationId: id, direction: 'all' };
     });
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'subway-times-display.tsx:270',message:'About to setStationConfigs',data:{newConfigs:JSON.stringify(newConfigs.map(c=>c.stationId))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     setStationConfigs(newConfigs);
   };
 

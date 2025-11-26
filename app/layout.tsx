@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "F Train Times - 7th Ave Brooklyn",
-  description: "Real-time F train arrival times at 7th Ave station in Brooklyn (Manhattan-bound)",
+  title: "Subway Train Times",
+  description: "Real-time NYC subway arrival times and weather insights",
 };
 
 export default function RootLayout({
