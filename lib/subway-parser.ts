@@ -79,13 +79,8 @@ export function parseGTFSFeed(
       const routeId = trip?.routeId;
       
       // Filter by route if specified
-      // If routeFilter is an empty array, exclude all routes
-      // If routeFilter is provided and non-empty, only include routes in the filter
-      // Entities without a routeId are excluded when a filter is specified
-      if (routeFilter !== undefined) {
-        if (routeFilter.length === 0 || !routeId || !routeFilter.includes(routeId)) {
-          continue;
-        }
+      if (routeFilter && routeId && !routeFilter.includes(routeId)) {
+        continue;
       }
 
       if (!routeId) continue;
@@ -142,13 +137,9 @@ export function parseGTFSFeed(
       const alert = entity.alert;
       
       // Collect alerts for any route (or filter if specified)
-      // If routeFilter is undefined, include all alerts
-      // If routeFilter is an empty array, exclude all alerts
-      // If routeFilter has items, only include alerts for those routes
-      const isForRoute = routeFilter === undefined || 
-        (routeFilter.length > 0 && alert.informedEntity?.some(
-          (informedEntity) => informedEntity.routeId && routeFilter.includes(informedEntity.routeId)
-        ));
+      const isForRoute = !routeFilter || alert.informedEntity?.some(
+        (informedEntity) => informedEntity.routeId && routeFilter.includes(informedEntity.routeId)
+      );
 
       if (isForRoute && alert.headerText && alert.headerText.translation) {
         const translations = alert.headerText.translation;
