@@ -572,38 +572,40 @@ export function SubwayTimesDisplay() {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext
-            items={stationConfigs.map(c => c.stationId)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-4">
-              {stationConfigs.map((config) => {
-                const arrivals = arrivalsByStation[config.stationId] || [];
-                const alerts = alertsByStation[config.stationId] || [];
-                
-                // Determine if this station should be shown based on filter
-                const hasFilteredStations = filteredStationIds.length > 0;
-                const isStationFiltered = filteredStationIds.includes(config.stationId);
-                
-                // If filtering is active and this station is not in the filter, hide it
-                if (hasFilteredStations && !isStationFiltered) {
-                  return null;
-                }
-                
-                return (
-                  <SortableStationCard
-                    key={config.stationId}
-                    config={config}
-                    arrivals={arrivals}
-                    alerts={alerts}
-                    onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
-                    onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
-                    showDragHandle={stationConfigs.length > 1}
-                  />
-                );
-              })}
-            </div>
-          </SortableContext>
+          {(() => {
+            // Compute visible stations to ensure SortableContext items match rendered children
+            const hasFilteredStations = filteredStationIds.length > 0;
+            const visibleConfigs = hasFilteredStations
+              ? stationConfigs.filter(c => filteredStationIds.includes(c.stationId))
+              : stationConfigs;
+            const visibleStationIds = visibleConfigs.map(c => c.stationId);
+            
+            return (
+              <SortableContext
+                items={visibleStationIds}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-4">
+                  {visibleConfigs.map((config) => {
+                    const arrivals = arrivalsByStation[config.stationId] || [];
+                    const alerts = alertsByStation[config.stationId] || [];
+                    
+                    return (
+                      <SortableStationCard
+                        key={config.stationId}
+                        config={config}
+                        arrivals={arrivals}
+                        alerts={alerts}
+                        onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
+                        onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                        showDragHandle={stationConfigs.length > 1}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            );
+          })()}
         </DndContext>
       )}
 
