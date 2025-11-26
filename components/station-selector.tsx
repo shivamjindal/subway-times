@@ -25,9 +25,11 @@ import { CSS } from '@dnd-kit/utilities';
 interface StationSelectorProps {
   selectedStations: string[];
   onStationsChange: (stations: string[]) => void;
+  filteredStations?: string[];
+  onStationFilterToggle?: (stationId: string) => void;
 }
 
-export function StationSelector({ selectedStations, onStationsChange }: StationSelectorProps) {
+export function StationSelector({ selectedStations, onStationsChange, filteredStations = [], onStationFilterToggle }: StationSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -66,7 +68,11 @@ export function StationSelector({ selectedStations, onStationsChange }: StationS
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -173,6 +179,8 @@ export function StationSelector({ selectedStations, onStationsChange }: StationS
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
               {selectedStationData.map((station) => {
                 const routes = getRoutesForStation(station.stopId);
+                const hasFiltered = filteredStations.length > 0;
+                const isFiltered = filteredStations.includes(station.stopId);
                 return (
                   <SortableStationCard
                     key={station.stopId}
@@ -181,6 +189,9 @@ export function StationSelector({ selectedStations, onStationsChange }: StationS
                     routes={routes}
                     onRemove={handleRemoveStation}
                     canDrag={selectedStations.length > 1}
+                    isFiltered={isFiltered}
+                    hasFilteredStations={hasFiltered}
+                    onFilterToggle={onStationFilterToggle}
                   />
                 );
               })}
@@ -198,9 +209,12 @@ interface SortableStationCardProps {
   routes: ReturnType<typeof getRoutesForStation>;
   onRemove: (stationId: string, e?: React.MouseEvent) => void;
   canDrag: boolean;
+  isFiltered: boolean;
+  hasFilteredStations: boolean;
+  onFilterToggle?: (stationId: string) => void;
 }
 
-function SortableStationCard({ stationId, station, routes, onRemove, canDrag }: SortableStationCardProps) {
+function SortableStationCard({ stationId, station, routes, onRemove, canDrag, isFiltered, hasFilteredStations, onFilterToggle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -210,17 +224,29 @@ function SortableStationCard({ stationId, station, routes, onRemove, canDrag }: 
     isDragging,
   } = useSortable({ id: stationId });
 
+  // Calculate opacity: full when no filter or when this station is filtered, dimmed otherwise
+  const filterOpacity = hasFilteredStations ? (isFiltered ? 1 : 0.4) : 1;
+  const finalOpacity = isDragging ? 0.5 : filterOpacity;
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: finalOpacity,
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Only trigger filter toggle if it wasn't a drag action
+    if (onFilterToggle) {
+      onFilterToggle(stationId);
+    }
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border flex-shrink-0 min-w-fit ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      className={`flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border flex-shrink-0 min-w-fit transition-opacity ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} hover:bg-muted/80`}
+      onClick={handleCardClick}
       {...(canDrag ? { ...attributes, ...listeners } : {})}
     >
       <div>
