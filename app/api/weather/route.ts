@@ -1,13 +1,23 @@
 import { NextResponse } from 'next/server';
+import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
 
 // NWS API endpoints
 // First, get the grid point from lat/lon, then get the forecast
+const DEFAULT_LAT = 40.7128;
+const DEFAULT_LON = -74.0060;
+const MIN_LAT = -90;
+const MAX_LAT = 90;
+const MIN_LON = -180;
+const MAX_LON = 180;
+const WEATHER_REQUEST_TIMEOUT_MS = 8000;
+
 async function getGridPoint(lat: number, lon: number): Promise<{ gridId: string; gridX: number; gridY: number }> {
-  const response = await fetch(`https://api.weather.gov/points/${lat},${lon}`, {
+  const response = await fetchWithTimeout(`https://api.weather.gov/points/${lat},${lon}`, {
     headers: {
       'User-Agent': 'subway-times-app/1.0',
     },
     next: { revalidate: 3600 }, // Cache for 1 hour
+    timeoutMs: WEATHER_REQUEST_TIMEOUT_MS,
   });
 
   if (!response.ok) {
@@ -23,13 +33,14 @@ async function getGridPoint(lat: number, lon: number): Promise<{ gridId: string;
 }
 
 async function getForecast(gridId: string, gridX: number, gridY: number) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://api.weather.gov/gridpoints/${gridId}/${gridX},${gridY}/forecast`,
     {
       headers: {
         'User-Agent': 'subway-times-app/1.0',
       },
       next: { revalidate: 1800 }, // Cache for 30 minutes
+      timeoutMs: WEATHER_REQUEST_TIMEOUT_MS,
     }
   );
 
@@ -41,13 +52,14 @@ async function getForecast(gridId: string, gridX: number, gridY: number) {
 }
 
 async function getHourlyForecast(gridId: string, gridX: number, gridY: number) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://api.weather.gov/gridpoints/${gridId}/${gridX},${gridY}/forecast/hourly`,
     {
       headers: {
         'User-Agent': 'subway-times-app/1.0',
       },
       next: { revalidate: 900 }, // Cache for 15 minutes
+      timeoutMs: WEATHER_REQUEST_TIMEOUT_MS,
     }
   );
 
@@ -62,12 +74,17 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     // Default to NYC coordinates (Manhattan)
-    const lat = parseFloat(searchParams.get('lat') || '40.7128');
-    const lon = parseFloat(searchParams.get('lon') || '-74.0060');
+    const latParam = searchParams.get('lat');
+    const lonParam = searchParams.get('lon');
+    const lat = latParam !== null ? parseFloat(latParam) : DEFAULT_LAT;
+    const lon = lonParam !== null ? parseFloat(lonParam) : DEFAULT_LON;
 
-    if (isNaN(lat) || isNaN(lon)) {
+    const latIsInvalid = Number.isNaN(lat) || !Number.isFinite(lat) || lat < MIN_LAT || lat > MAX_LAT;
+    const lonIsInvalid = Number.isNaN(lon) || !Number.isFinite(lon) || lon < MIN_LON || lon > MAX_LON;
+
+    if (latIsInvalid || lonIsInvalid) {
       return NextResponse.json(
-        { error: 'Invalid latitude or longitude' },
+        { error: 'Invalid latitude or longitude', message: 'Latitude must be between -90 and 90, longitude between -180 and 180.' },
         { status: 400 }
       );
     }
