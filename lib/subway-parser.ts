@@ -111,7 +111,8 @@ export function parseGTFSFeed(
               // Extract destination from trip headsign if available
               // Note: GTFS realtime trip descriptor may not always include headsign
               // Fallback to headsign from GTFS static data, then generic direction
-              const destination = (trip as any)?.tripHeadsign || 
+              const tripHeadsign = (trip as { tripHeadsign?: string })?.tripHeadsign;
+              const destination = tripHeadsign || 
                 getHeadsignForRoute(routeId, direction) ||
                 (direction === 'N' ? 'Northbound' : 'Southbound');
               

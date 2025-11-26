@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -121,7 +121,7 @@ export function SubwayTimesDisplay() {
     return [...selectedStationIds].sort().join(',');
   }, [selectedStationIds]);
 
-  const fetchData = async (showRefreshing = false) => {
+  const fetchData = useCallback(async (showRefreshing = false) => {
     if (selectedStationIds.length === 0) {
       setData({ arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) });
       setLoading(false);
@@ -157,13 +157,13 @@ export function SubwayTimesDisplay() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [selectedStationIds, data]);
 
   useEffect(() => {
     if (selectedStationIds.length > 0) {
       fetchData();
     }
-  }, [selectedStationIdsKey]);
+  }, [selectedStationIdsKey, selectedStationIds.length, fetchData]);
 
   useEffect(() => {
     if (selectedStationIds.length === 0) return;
@@ -174,7 +174,7 @@ export function SubwayTimesDisplay() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [selectedStationIdsKey]);
+  }, [selectedStationIdsKey, selectedStationIds.length, fetchData]);
 
   // Fetch weather data for NYC
   useEffect(() => {

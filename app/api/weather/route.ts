@@ -113,7 +113,15 @@ export async function GET(request: Request) {
     const windDirection = currentHour.windDirection || todayPeriod.windDirection || 'N/A';
 
     // Get hourly forecast (next 24 hours)
-    const hourlyPeriods = hourlyForecast.properties.periods.slice(0, 24).map((period: any) => ({
+    const hourlyPeriods = hourlyForecast.properties.periods.slice(0, 24).map((period: {
+      startTime: string;
+      temperature: number;
+      shortForecast: string;
+      windSpeed: string;
+      windDirection: string;
+      probabilityOfPrecipitation?: { value: number };
+      isDaytime: boolean;
+    }) => ({
       time: period.startTime,
       temperature: period.temperature,
       condition: period.shortForecast,

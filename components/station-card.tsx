@@ -31,8 +31,8 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   const hasSouthbound = southboundRoutes.length > 0;
   
   // Get direction labels based on actual train destinations
-  const northboundLabel = getDirectionLabel('N', arrivals, stationId);
-  const southboundLabel = getDirectionLabel('S', arrivals, stationId);
+  const northboundLabel = getDirectionLabel('N', arrivals);
+  const southboundLabel = getDirectionLabel('S', arrivals);
 
   // Filter arrivals by direction
   const filteredArrivals = useMemo(() => {
@@ -42,13 +42,10 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
 
   // Filter alerts for this station's routes
   const stationAlerts = useMemo(() => {
-    const routeIds = new Set(routes.map(r => r.routeId));
-    return alerts.filter(alert => {
-      // Check if alert affects any route at this station
-      // Note: This is a simplified check - real alerts might have more complex matching
-      return true; // Show all alerts for now
-    });
-  }, [alerts, routes]);
+    // Note: This is a simplified check - real alerts might have more complex matching
+    // Show all alerts for now
+    return alerts;
+  }, [alerts]);
 
   const displayedArrivals = isExpanded 
     ? filteredArrivals 

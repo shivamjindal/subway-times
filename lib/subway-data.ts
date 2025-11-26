@@ -252,8 +252,7 @@ const routeHeadsigns = routeHeadsignsData as Record<string, { N: string[]; S: st
 // Returns formatted labels like "Downtown and Brooklyn", "Uptown and Queens", etc.
 export function getDirectionLabel(
   direction: 'N' | 'S',
-  arrivals: Array<{ destination: string; direction: 'N' | 'S'; routeId: string; stationId?: string }>,
-  stationId?: string
+  arrivals: Array<{ destination: string; direction: 'N' | 'S'; routeId: string; stationId?: string }>
 ): string {
   // Get unique routes for this direction
   const directionArrivals = arrivals.filter(a => a.direction === direction);
