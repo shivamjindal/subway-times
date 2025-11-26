@@ -1,45 +1,41 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Settings } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 const WEATHER_CARD_VISIBLE_KEY = 'weatherCardVisible';
 
+function getWeatherVisibleSnapshot(): boolean {
+  try {
+    const saved = localStorage.getItem(WEATHER_CARD_VISIBLE_KEY);
+    if (saved !== null) {
+      return JSON.parse(saved);
+    }
+  } catch (err) {
+    console.error('Error loading weather visibility setting:', err);
+  }
+  return true;
+}
+
+function subscribeToWeatherVisible(callback: () => void): () => void {
+  const handleStorageChange = (e: StorageEvent) => {
+    if (e.key === WEATHER_CARD_VISIBLE_KEY) {
+      callback();
+    }
+  };
+  window.addEventListener('storage', handleStorageChange);
+  return () => window.removeEventListener('storage', handleStorageChange);
+}
+
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
-  const [weatherVisible, setWeatherVisible] = useState(true);
+  const weatherVisible = useSyncExternalStore(
+    subscribeToWeatherVisible,
+    getWeatherVisibleSnapshot,
+    () => true // server snapshot
+  );
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Load weather visibility setting from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(WEATHER_CARD_VISIBLE_KEY);
-      if (saved !== null) {
-        setWeatherVisible(JSON.parse(saved));
-      }
-    } catch (err) {
-      console.error('Error loading weather visibility setting:', err);
-    }
-  }, []);
-
-  // Listen for storage changes to sync across tabs
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === WEATHER_CARD_VISIBLE_KEY) {
-        try {
-          if (e.newValue !== null) {
-            setWeatherVisible(JSON.parse(e.newValue));
-          }
-        } catch (err) {
-          console.error('Error parsing weather visibility setting:', err);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -56,7 +52,6 @@ export function SettingsButton() {
   }, [isOpen]);
 
   const handleWeatherToggle = (checked: boolean) => {
-    setWeatherVisible(checked);
     try {
       localStorage.setItem(WEATHER_CARD_VISIBLE_KEY, JSON.stringify(checked));
       // Dispatch custom event for same-tab sync

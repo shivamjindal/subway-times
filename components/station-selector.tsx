@@ -234,7 +234,7 @@ function SortableStationCard({ stationId, station, routes, onRemove, canDrag, is
     opacity: finalOpacity,
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = () => {
     // Only trigger filter toggle if it wasn't a drag action
     if (onFilterToggle) {
       onFilterToggle(stationId);

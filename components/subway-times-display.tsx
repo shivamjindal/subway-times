@@ -226,7 +226,7 @@ export function SubwayTimesDisplay() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStationIdsKey]); // Only recreate when actual station IDs change, not order
+  }, []); // Uses ref to access current station IDs, no dependencies needed
 
   useEffect(() => {
     fetchData();
