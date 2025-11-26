@@ -14,11 +14,13 @@ interface StationCardProps {
   alerts: ServiceAlert[];
   direction: 'all' | 'N' | 'S';
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
+  selectedRoutes?: string[];
+  onRouteToggle: (routeId: string) => void;
 }
 
 const INITIAL_TRAINS_TO_SHOW = 5;
 
-export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange }: StationCardProps) {
+export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -34,11 +36,22 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   const northboundLabel = getDirectionLabel('N', arrivals);
   const southboundLabel = getDirectionLabel('S', arrivals);
 
-  // Filter arrivals by direction
+  // Filter arrivals by direction and selected routes
   const filteredArrivals = useMemo(() => {
-    if (direction === 'all') return arrivals;
-    return arrivals.filter(a => a.direction === direction);
-  }, [arrivals, direction]);
+    let filtered = arrivals;
+    
+    // Filter by direction
+    if (direction !== 'all') {
+      filtered = filtered.filter(a => a.direction === direction);
+    }
+    
+    // Filter by selected routes (if any are selected)
+    if (selectedRoutes && selectedRoutes.length > 0) {
+      filtered = filtered.filter(a => selectedRoutes.includes(a.routeId));
+    }
+    
+    return filtered;
+  }, [arrivals, direction, selectedRoutes]);
 
   // Filter alerts for this station's routes
   const stationAlerts = useMemo(() => {
@@ -66,17 +79,36 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
               {station.name}
               {routes.map((route) => {
                 const color = getRouteColor(route.routeId);
+                const hasSelectedRoutes = selectedRoutes && selectedRoutes.length > 0;
+                const isSelected = selectedRoutes?.includes(route.routeId) ?? false;
+                // In default state (no routes selected), show all at 100% opacity
+                // When routes are selected, show selected at 100%, unselected at reduced opacity
+                const opacity = hasSelectedRoutes ? (isSelected ? 1 : 0.4) : 1;
                 return (
-                  <Badge
+                  <button
                     key={route.routeId}
-                    className="text-sm"
-                    style={{
-                      backgroundColor: `#${color}`,
-                      color: route.textColor === 'FFFFFF' ? 'white' : 'black',
+                    type="button"
+                    onClick={() => onRouteToggle(route.routeId)}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
                     }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="cursor-pointer transition-all hover:scale-105 active:scale-95"
+                    aria-label={isSelected ? `Deselect ${route.shortName} route` : `Select ${route.shortName} route`}
                   >
-                    {route.shortName}
-                  </Badge>
+                    <Badge
+                      className="text-sm transition-opacity"
+                      style={{
+                        backgroundColor: `#${color}`,
+                        color: route.textColor === 'FFFFFF' ? 'white' : 'black',
+                        opacity: opacity,
+                      }}
+                    >
+                      {route.shortName}
+                    </Badge>
+                  </button>
                 );
               })}
             </CardTitle>

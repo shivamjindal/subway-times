@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
+import { getRoutesForStation } from '@/lib/subway-data';
 import { AlertCircle, Cloud, CloudRain, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
@@ -29,6 +30,7 @@ import { CSS } from '@dnd-kit/utilities';
 interface StationConfig {
   stationId: string;
   direction: 'all' | 'N' | 'S';
+  selectedRoutes?: string[];
 }
 
 interface SubwayTimesData {
@@ -67,6 +69,7 @@ interface WeatherData {
 }
 
 const STORAGE_KEY = 'selectedStations';
+const WEATHER_CARD_VISIBLE_KEY = 'weatherCardVisible';
 
 export function SubwayTimesDisplay() {
   const [stationConfigs, setStationConfigs] = useState<StationConfig[]>([]);
@@ -77,6 +80,8 @@ export function SubwayTimesDisplay() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherCardVisible, setWeatherCardVisible] = useState(true);
+  const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
   const hasDataRef = useRef(false);
   const dataRef = useRef<SubwayTimesData | null>(null);
 
@@ -98,6 +103,45 @@ export function SubwayTimesDisplay() {
       console.error('Error loading stations from localStorage:', err);
       localStorage.removeItem(STORAGE_KEY);
     }
+  }, []);
+
+  // Load weather card visibility setting from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(WEATHER_CARD_VISIBLE_KEY);
+      if (saved !== null) {
+        setWeatherCardVisible(JSON.parse(saved));
+      }
+    } catch (err) {
+      console.error('Error loading weather card visibility setting:', err);
+    }
+  }, []);
+
+  // Listen for storage changes to sync weather card visibility across tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === WEATHER_CARD_VISIBLE_KEY) {
+        try {
+          if (e.newValue !== null) {
+            setWeatherCardVisible(JSON.parse(e.newValue));
+          }
+        } catch (err) {
+          console.error('Error parsing weather card visibility setting:', err);
+        }
+      }
+    };
+
+    // Listen for custom event for same-tab updates
+    const handleCustomChange = (e: CustomEvent<{ visible: boolean }>) => {
+      setWeatherCardVisible(e.detail.visible);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('weatherCardVisibilityChange', handleCustomChange as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('weatherCardVisibilityChange', handleCustomChange as EventListener);
+    };
   }, []);
 
   // Save stations to localStorage whenever they change
@@ -182,7 +226,7 @@ export function SubwayTimesDisplay() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStationIdsKey]); // Only recreate when actual station IDs change, not order
+  }, []); // Uses ref to access current station IDs, no dependencies needed
 
   useEffect(() => {
     fetchData();
@@ -273,14 +317,64 @@ export function SubwayTimesDisplay() {
     // Add new stations with default direction 'all'
     const newConfigs: StationConfig[] = stationIds.map(id => {
       const existing = stationConfigs.find(c => c.stationId === id);
-      return existing || { stationId: id, direction: 'all' };
+      return existing || { stationId: id, direction: 'all', selectedRoutes: [] };
     });
     setStationConfigs(newConfigs);
+    
+    // Clear any filtered stations that were removed
+    setFilteredStationIds(prev => prev.filter(id => stationIds.includes(id)));
+  };
+
+  const handleStationFilterToggle = (stationId: string) => {
+    setFilteredStationIds(prev => {
+      const isSelected = prev.includes(stationId);
+      
+      // Calculate new filtered stations after toggle
+      const newFiltered = isSelected
+        ? prev.filter(id => id !== stationId)
+        : [...prev, stationId];
+      
+      // If all stations are selected, reset to default (empty array = show all)
+      const allStationIds = stationConfigs.map(c => c.stationId);
+      const shouldReset = newFiltered.length === allStationIds.length && 
+                          allStationIds.every(id => newFiltered.includes(id));
+      
+      return shouldReset ? [] : newFiltered;
+    });
   };
 
   const handleDirectionChange = (stationId: string, direction: 'all' | 'N' | 'S') => {
     setStationConfigs(prev => 
       prev.map(c => c.stationId === stationId ? { ...c, direction } : c)
+    );
+  };
+
+  const handleRouteToggle = (stationId: string, routeId: string) => {
+    setStationConfigs(prev =>
+      prev.map(c => {
+        if (c.stationId !== stationId) return c;
+        
+        const currentRoutes = c.selectedRoutes || [];
+        const isSelected = currentRoutes.includes(routeId);
+        
+        // Calculate new selected routes after toggle
+        const newSelectedRoutes = isSelected
+          ? currentRoutes.filter(r => r !== routeId)
+          : [...currentRoutes, routeId];
+        
+        // Get all available routes for this station
+        const allRoutes = getRoutesForStation(stationId);
+        const allRouteIds = allRoutes.map(r => r.routeId);
+        
+        // If all routes are selected, reset to default (empty array = show all)
+        const shouldReset = newSelectedRoutes.length === allRouteIds.length && 
+                           allRouteIds.every(id => newSelectedRoutes.includes(id));
+        
+        return {
+          ...c,
+          selectedRoutes: shouldReset ? [] : newSelectedRoutes,
+        };
+      })
     );
   };
 
@@ -377,88 +471,94 @@ export function SubwayTimesDisplay() {
         <StationSelector
           selectedStations={selectedStationIds}
           onStationsChange={handleStationsChange}
+          filteredStations={filteredStationIds}
+          onStationFilterToggle={handleStationFilterToggle}
         />
       </div>
 
       {/* Weather Section */}
-      {weatherLoading ? (
-        <div className="mb-6">
-          <Skeleton className="h-32 w-full" />
-        </div>
-      ) : weatherError ? (
-        <div className="mb-6">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>Weather: {weatherError}</AlertDescription>
-          </Alert>
-        </div>
-      ) : weather ? (
-        <Card className="mb-6">
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold">NYC Weather</h2>
+      {weatherCardVisible && (
+        <>
+          {weatherLoading ? (
+            <div className="mb-6">
+              <Skeleton className="h-32 w-full" />
             </div>
-            {/* Current Weather */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-2xl font-bold">
-                  {getWeatherIcon(weather.current.condition)}
-                  {weather.current.temperature}°F
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {weather.current.condition}
-                </div>
-              </div>
-              <div className="space-y-1 text-right">
-                <div className="text-base font-semibold">
-                  H: {formatTemperatureValue(weather.today.high)} / L: {formatTemperatureValue(weather.today.low)}
-                </div>
-                <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
-                  <Wind className="h-4 w-4" />
-                  {weather.current.windSpeed}
-                  {weather.current.windDirection !== 'N/A' && ` ${weather.current.windDirection}`}
-                </div>
-              </div>
+          ) : weatherError ? (
+            <div className="mb-6">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>Weather: {weatherError}</AlertDescription>
+              </Alert>
             </div>
-
-            {/* Hourly Forecast */}
-            {weather.hourly && weather.hourly.length > 0 && (
-              <div className="space-y-3">
-                <div className="text-sm font-semibold">Hourly Forecast</div>
-                <div className="overflow-x-auto -mx-6 px-6">
-                  <div className="flex gap-3 pb-2 min-w-max">
-                    {weather.hourly.slice(0, 12).map((hour, index) => (
-                      <div
-                        key={index}
-                        className="flex flex-col items-center gap-2 p-4 min-w-[100px] border rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:from-muted/50 hover:to-muted/30 transition-all shadow-sm hover:shadow-md"
-                      >
-                        <div className="text-sm font-semibold text-foreground">
-                          {formatHourlyTime(hour.time)}
-                        </div>
-                        <div className="text-2xl text-muted-foreground">
-                          {getWeatherIcon(hour.condition)}
-                        </div>
-                        <div className="text-lg font-bold text-foreground">
-                          {hour.temperature}°F
-                        </div>
-                        {hour.probabilityOfPrecipitation > 0 && (
-                          <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                            {hour.probabilityOfPrecipitation}%
-                          </div>
-                        )}
-                        <div className="text-xs text-muted-foreground text-center flex items-center gap-1">
-                          <Wind className="h-3 w-3" />
-                          {hour.windSpeed}
-                        </div>
-                      </div>
-                    ))}
+          ) : weather ? (
+            <Card className="mb-6">
+              <CardContent className="pt-6 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-semibold">NYC Weather</h2>
+                </div>
+                {/* Current Weather */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-2xl font-bold">
+                      {getWeatherIcon(weather.current.condition)}
+                      {weather.current.temperature}°F
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {weather.current.condition}
+                    </div>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <div className="text-base font-semibold">
+                      H: {formatTemperatureValue(weather.today.high)} / L: {formatTemperatureValue(weather.today.low)}
+                    </div>
+                    <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
+                      <Wind className="h-4 w-4" />
+                      {weather.current.windSpeed}
+                      {weather.current.windDirection !== 'N/A' && ` ${weather.current.windDirection}`}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+
+                {/* Hourly Forecast */}
+                {weather.hourly && weather.hourly.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-sm font-semibold">Hourly Forecast</div>
+                    <div className="overflow-x-auto -mx-6 px-6">
+                      <div className="flex gap-3 pb-2 min-w-max">
+                        {weather.hourly.slice(0, 12).map((hour, index) => (
+                          <div
+                            key={index}
+                            className="flex flex-col items-center gap-2 p-4 min-w-[100px] border rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:from-muted/50 hover:to-muted/30 transition-all shadow-sm hover:shadow-md"
+                          >
+                            <div className="text-sm font-semibold text-foreground">
+                              {formatHourlyTime(hour.time)}
+                            </div>
+                            <div className="text-2xl text-muted-foreground">
+                              {getWeatherIcon(hour.condition)}
+                            </div>
+                            <div className="text-lg font-bold text-foreground">
+                              {hour.temperature}°F
+                            </div>
+                            {hour.probabilityOfPrecipitation > 0 && (
+                              <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                {hour.probabilityOfPrecipitation}%
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground text-center flex items-center gap-1">
+                              <Wind className="h-3 w-3" />
+                              {hour.windSpeed}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+        </>
+      )}
 
       {/* Station Cards */}
       {selectedStationIds.length === 0 ? (
@@ -472,28 +572,40 @@ export function SubwayTimesDisplay() {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext
-            items={stationConfigs.map(c => c.stationId)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-4">
-              {stationConfigs.map((config) => {
-                const arrivals = arrivalsByStation[config.stationId] || [];
-                const alerts = alertsByStation[config.stationId] || [];
-                
-                return (
-                  <SortableStationCard
-                    key={config.stationId}
-                    config={config}
-                    arrivals={arrivals}
-                    alerts={alerts}
-                    onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
-                    showDragHandle={stationConfigs.length > 1}
-                  />
-                );
-              })}
-            </div>
-          </SortableContext>
+          {(() => {
+            // Compute visible stations to ensure SortableContext items match rendered children
+            const hasFilteredStations = filteredStationIds.length > 0;
+            const visibleConfigs = hasFilteredStations
+              ? stationConfigs.filter(c => filteredStationIds.includes(c.stationId))
+              : stationConfigs;
+            const visibleStationIds = visibleConfigs.map(c => c.stationId);
+            
+            return (
+              <SortableContext
+                items={visibleStationIds}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-4">
+                  {visibleConfigs.map((config) => {
+                    const arrivals = arrivalsByStation[config.stationId] || [];
+                    const alerts = alertsByStation[config.stationId] || [];
+                    
+                    return (
+                      <SortableStationCard
+                        key={config.stationId}
+                        config={config}
+                        arrivals={arrivals}
+                        alerts={alerts}
+                        onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
+                        onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                        showDragHandle={stationConfigs.length > 1}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            );
+          })()}
         </DndContext>
       )}
 
@@ -513,10 +625,11 @@ interface SortableStationCardProps {
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
+  onRouteToggle: (routeId: string) => void;
   showDragHandle: boolean;
 }
 
-function SortableStationCard({ config, arrivals, alerts, onDirectionChange, showDragHandle }: SortableStationCardProps) {
+function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -548,6 +661,8 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange, show
           alerts={alerts}
           direction={config.direction}
           onDirectionChange={onDirectionChange}
+          selectedRoutes={config.selectedRoutes}
+          onRouteToggle={onRouteToggle}
         />
       </div>
     </div>
