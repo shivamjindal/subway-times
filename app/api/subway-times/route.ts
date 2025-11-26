@@ -138,7 +138,7 @@ export async function GET(request: Request) {
     // Determine which feeds we need
     const neededFeeds = new Set<string>();
     const stationRoutes = new Set<string>();
-    const unmatchedRoutes: string[] = [];
+    const unmatchedRoutes = new Set<string>();
     
     stationConfigs.forEach(config => {
       config.routes.forEach(routeId => {
@@ -148,15 +148,15 @@ export async function GET(request: Request) {
           neededFeeds.add(feed);
         } else {
           // Track unmatched routes for error reporting
-          unmatchedRoutes.push(routeId);
+          unmatchedRoutes.add(routeId);
         }
       });
     });
 
     // Report unmatched routes to alert developers
-    if (unmatchedRoutes.length > 0) {
+    if (unmatchedRoutes.size > 0) {
       console.warn(
-        `Warning: Routes without feed mapping found: ${unmatchedRoutes.join(', ')}. ` +
+        `Warning: Routes without feed mapping found: ${Array.from(unmatchedRoutes).join(', ')}. ` +
         `These routes will not have arrival data fetched. Please add them to ROUTE_TO_FEED mapping.`
       );
     }
