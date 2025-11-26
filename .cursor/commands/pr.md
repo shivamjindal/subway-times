@@ -16,7 +16,7 @@ Create a high-quality Pull Request by ensuring all tests pass, builds succeed, a
    - Ensure all tests pass with green checkmarks
 
 2. **Build Frontend**
-   - Execute: `cd /Users/shivam/repos/demo_ecomm-201/frontend && npm run build`
+   - Execute: `cd /Users/shivam/repos/2_personal/subway-times && npm run build`
    - Fix any build errors before proceeding
    - Ensure the build completes successfully
 
