@@ -98,8 +98,25 @@ export async function GET(request: Request) {
       getHourlyForecast(gridPoint.gridId, gridPoint.gridX, gridPoint.gridY),
     ]);
 
+    // Validate forecast response structure
+    const periods = forecast?.properties?.periods;
+    if (!Array.isArray(periods) || periods.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid forecast data', message: 'Weather service returned an unexpected response structure.' },
+        { status: 502 }
+      );
+    }
+
+    // Validate hourly forecast response structure
+    const hourlyPeriods = hourlyForecast?.properties?.periods;
+    if (!Array.isArray(hourlyPeriods) || hourlyPeriods.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid hourly forecast data', message: 'Weather service returned an unexpected response structure.' },
+        { status: 502 }
+      );
+    }
+
     // Extract today's forecast
-    const periods = forecast.properties.periods;
     const todayPeriod = periods[0];
     
     // Find today's high and low
@@ -108,7 +125,8 @@ export async function GET(request: Request) {
     let todayLow = !todayPeriod.isDaytime ? todayPeriod.temperature : null;
     
     // Look through first few periods to find today's high/low
-    for (let i = 0; i < Math.min(4, periods.length); i++) {
+    // Start at index 1 since periods[0] is already processed above
+    for (let i = 1; i < Math.min(4, periods.length); i++) {
       const period = periods[i];
       if (period.isDaytime && (todayHigh === null || period.temperature > todayHigh)) {
         todayHigh = period.temperature;
@@ -123,14 +141,14 @@ export async function GET(request: Request) {
     if (todayLow === null) todayLow = todayPeriod.temperature;
 
     // Get current conditions from hourly forecast
-    const currentHour = hourlyForecast.properties.periods[0];
+    const currentHour = hourlyPeriods[0];
 
     // Extract wind information
     const windSpeed = currentHour.windSpeed || todayPeriod.windSpeed || 'N/A';
     const windDirection = currentHour.windDirection || todayPeriod.windDirection || 'N/A';
 
     // Get hourly forecast (next 24 hours)
-    const hourlyPeriods = hourlyForecast.properties.periods.slice(0, 24).map((period: {
+    const hourlyForecastData = hourlyPeriods.slice(0, 24).map((period: {
       startTime: string;
       temperature: number;
       shortForecast: string;
@@ -163,7 +181,7 @@ export async function GET(request: Request) {
         windSpeed: todayPeriod.windSpeed,
         windDirection: todayPeriod.windDirection,
       },
-      hourly: hourlyPeriods,
+      hourly: hourlyForecastData,
       location: {
         gridId: gridPoint.gridId,
         gridX: gridPoint.gridX,
