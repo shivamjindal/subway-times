@@ -405,30 +405,31 @@ export function SubwayTimesDisplay() {
 
             {/* Hourly Forecast */}
             {weather.hourly && weather.hourly.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="text-sm font-semibold">Hourly Forecast</div>
-                <div className="overflow-x-auto">
-                  <div className="flex gap-2 pb-2 min-w-max">
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <div className="flex gap-3 pb-2 min-w-max">
                     {weather.hourly.slice(0, 12).map((hour, index) => (
                       <div
                         key={index}
-                        className="flex flex-col items-center gap-1 min-w-[70px] p-2 border rounded-lg bg-muted/30"
+                        className="flex flex-col items-center gap-2 p-4 min-w-[100px] border rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:from-muted/50 hover:to-muted/30 transition-all shadow-sm hover:shadow-md"
                       >
-                        <div className="text-xs font-medium text-muted-foreground">
+                        <div className="text-sm font-semibold text-foreground">
                           {formatHourlyTime(hour.time)}
                         </div>
-                        <div className="text-muted-foreground">
+                        <div className="text-2xl text-muted-foreground">
                           {getWeatherIcon(hour.condition)}
                         </div>
-                        <div className="text-sm font-semibold">
+                        <div className="text-lg font-bold text-foreground">
                           {hour.temperature}°F
                         </div>
                         {hour.probabilityOfPrecipitation > 0 && (
-                          <div className="text-xs text-blue-600">
+                          <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
                             {hour.probabilityOfPrecipitation}%
                           </div>
                         )}
-                        <div className="text-xs text-muted-foreground text-center">
+                        <div className="text-xs text-muted-foreground text-center flex items-center gap-1">
+                          <Wind className="h-3 w-3" />
                           {hour.windSpeed}
                         </div>
                       </div>

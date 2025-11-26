@@ -136,9 +136,43 @@ export async function GET(request: Request) {
       }
     }
     
-    // Fallback if we didn't find both
-    if (todayHigh === null) todayHigh = todayPeriod.temperature;
-    if (todayLow === null) todayLow = todayPeriod.temperature;
+    // Fallback if we didn't find both - only use todayPeriod.temperature if it matches the type
+    // If todayPeriod is daytime, it can only be used as a fallback for todayHigh
+    // If todayPeriod is nighttime, it can only be used as a fallback for todayLow
+    if (todayHigh === null && todayPeriod.isDaytime) {
+      todayHigh = todayPeriod.temperature;
+    }
+    if (todayLow === null && !todayPeriod.isDaytime) {
+      todayLow = todayPeriod.temperature;
+    }
+    
+    // If we still don't have both, search through more periods (up to 6 total)
+    // This handles edge cases where today spans more periods
+    if (todayHigh === null || todayLow === null) {
+      for (let i = 4; i < Math.min(6, periods.length); i++) {
+        const period = periods[i];
+        if (todayHigh === null && period.isDaytime) {
+          todayHigh = period.temperature;
+        }
+        if (todayLow === null && !period.isDaytime) {
+          todayLow = period.temperature;
+        }
+        // Stop early if we found both
+        if (todayHigh !== null && todayLow !== null) break;
+      }
+    }
+    
+    // Final fallback: if still missing, use hourly forecast to determine actual high/low
+    // This ensures we never have identical high/low values
+    if (todayHigh === null || todayLow === null) {
+      const todayHourlyTemps = hourlyPeriods.slice(0, 24).map((p: { temperature: number }) => p.temperature);
+      if (todayHourlyTemps.length > 0) {
+        const hourlyMax = Math.max(...todayHourlyTemps);
+        const hourlyMin = Math.min(...todayHourlyTemps);
+        if (todayHigh === null) todayHigh = hourlyMax;
+        if (todayLow === null) todayLow = hourlyMin;
+      }
+    }
 
     // Get current conditions from hourly forecast
     const currentHour = hourlyPeriods[0];
