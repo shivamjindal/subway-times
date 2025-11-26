@@ -122,8 +122,17 @@ export function SubwayTimesDisplay() {
     return [...selectedStationIds].sort().join(',');
   }, [selectedStationIds]);
 
+  // Use a ref to always access the latest selectedStationIds without causing re-renders
+  const selectedStationIdsRef = useRef(selectedStationIds);
+  useEffect(() => {
+    selectedStationIdsRef.current = selectedStationIds;
+  }, [selectedStationIds]);
+
   const fetchData = useCallback(async (showRefreshing = false) => {
-    if (selectedStationIds.length === 0) {
+    // Use ref to get current station IDs without making fetchData depend on order changes
+    const currentStationIds = selectedStationIdsRef.current;
+    
+    if (currentStationIds.length === 0) {
       setData({ arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) });
       setLoading(false);
       hasDataRef.current = false;
@@ -140,7 +149,7 @@ export function SubwayTimesDisplay() {
       }
       setError(null);
 
-      const stationsParam = selectedStationIds.join(',');
+      const stationsParam = currentStationIds.join(',');
       const response = await fetch(`/api/subway-times?stations=${stationsParam}`);
       if (!response.ok) {
         throw new Error('Failed to fetch subway times');
@@ -161,13 +170,16 @@ export function SubwayTimesDisplay() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStationIds]);
+  }, [selectedStationIdsKey]); // Only recreate when actual station IDs change, not order
 
   useEffect(() => {
     if (selectedStationIds.length > 0) {
       fetchData();
     }
-  }, [selectedStationIdsKey, selectedStationIds.length, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStationIdsKey, selectedStationIds.length]);
+  // Note: fetchData is intentionally excluded from deps to avoid re-fetching on reorder
+  // selectedStationIdsKey already captures when actual station IDs change
 
   useEffect(() => {
     if (selectedStationIds.length === 0) return;
@@ -178,7 +190,10 @@ export function SubwayTimesDisplay() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [selectedStationIdsKey, selectedStationIds.length, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStationIdsKey, selectedStationIds.length]);
+  // Note: fetchData is intentionally excluded from deps to avoid re-fetching on reorder
+  // selectedStationIdsKey already captures when actual station IDs change
 
   // Fetch weather data for NYC
   useEffect(() => {
