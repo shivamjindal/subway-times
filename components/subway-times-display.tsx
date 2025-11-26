@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -78,6 +78,7 @@ export function SubwayTimesDisplay() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const hasDataRef = useRef(false);
 
   // Load stations from localStorage on mount
   useEffect(() => {
@@ -125,12 +126,13 @@ export function SubwayTimesDisplay() {
     if (selectedStationIds.length === 0) {
       setData({ arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) });
       setLoading(false);
+      hasDataRef.current = false;
       return;
     }
 
     try {
       // If we already have data, use refreshing state instead of loading to avoid blanking the page
-      const shouldShowRefreshing = showRefreshing || data !== null;
+      const shouldShowRefreshing = showRefreshing || hasDataRef.current;
       if (shouldShowRefreshing) {
         setRefreshing(true);
       } else {
@@ -151,13 +153,15 @@ export function SubwayTimesDisplay() {
       }
 
       setData(result);
+      hasDataRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      hasDataRef.current = false;
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStationIds, data]);
+  }, [selectedStationIds]);
 
   useEffect(() => {
     if (selectedStationIds.length > 0) {
