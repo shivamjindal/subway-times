@@ -1,54 +1,167 @@
 import { NextResponse } from 'next/server';
 import { transit_realtime } from 'gtfs-realtime-bindings';
 import { parseGTFSFeed } from '@/lib/subway-parser';
+import { getRoutesForStation, getStation } from '@/lib/subway-data';
 
-const MTA_API_URL_F = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm';
-const MTA_API_URL_G = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g';
+// Map routes to MTA feed groups
+const ROUTE_TO_FEED: Record<string, string> = {
+  'A': 'ace',
+  'C': 'ace',
+  'E': 'ace',
+  'H': 'ace', // Rockaway Park Shuttle (connects with A line)
+  'B': 'bdfm',
+  'D': 'bdfm',
+  'F': 'bdfm',
+  'FX': 'bdfm', // F Express
+  'FS': 'bdfm', // Franklin Avenue Shuttle (connects with F line)
+  'M': 'bdfm',
+  'G': 'g',
+  'GS': '1234567', // 42 St Shuttle (connects Grand Central and Times Square)
+  'J': 'jz',
+  'Z': 'jz',
+  'N': 'nqrw',
+  'Q': 'nqrw',
+  'R': 'nqrw',
+  'W': 'nqrw',
+  'L': 'l',
+  '1': '1234567',
+  '2': '1234567',
+  '3': '1234567',
+  '4': '1234567',
+  '5': '1234567',
+  '6': '1234567',
+  '6X': '1234567', // 6 Express
+  '7': '1234567',
+  '7X': '1234567', // 7 Express
+  'SI': 'si',
+};
 
-export async function GET() {
+const FEED_URLS: Record<string, string> = {
+  'ace': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace',
+  'bdfm': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm',
+  'g': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g',
+  'jz': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-jz',
+  'nqrw': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw',
+  'l': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l',
+  '1234567': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs',
+  'si': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si',
+};
+
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const stationsParam = searchParams.get('stations');
+    
+    // Default to F24 (7th Ave Brooklyn) for backward compatibility
+    const stationIds = stationsParam 
+      ? stationsParam.split(',').map(s => s.trim()).filter(Boolean)
+      : ['F24'];
+
+    if (stationIds.length === 0) {
+      return NextResponse.json({
+        arrivals: [],
+        alerts: [],
+        lastUpdated: Math.floor(Date.now() / 1000),
+      });
+    }
+
+    // Build map of station -> routes and stop IDs
+    const stationConfigs: Array<{
+      stationId: string;
+      stopIds: string[];
+      routes: string[];
+    }> = [];
+
+    for (const stationId of stationIds) {
+      const station = getStation(stationId);
+      if (!station) continue;
+
+      const routes = getRoutesForStation(stationId);
+      const routeIds = routes.map(r => r.routeId);
+      
+      // Generate stop IDs: stationId + N and stationId + S
+      const stopIds = [`${stationId}N`, `${stationId}S`];
+      
+      stationConfigs.push({
+        stationId,
+        stopIds,
+        routes: routeIds,
+      });
+    }
+
+    // Determine which feeds we need
+    const neededFeeds = new Set<string>();
+    const stationRoutes = new Set<string>();
+    const unmatchedRoutes: string[] = [];
+    
+    stationConfigs.forEach(config => {
+      config.routes.forEach(routeId => {
+        stationRoutes.add(routeId);
+        const feed = ROUTE_TO_FEED[routeId];
+        if (feed) {
+          neededFeeds.add(feed);
+        } else {
+          // Track unmatched routes for error reporting
+          unmatchedRoutes.push(routeId);
+        }
+      });
+    });
+
+    // Report unmatched routes to alert developers
+    if (unmatchedRoutes.length > 0) {
+      console.warn(
+        `Warning: Routes without feed mapping found: ${unmatchedRoutes.join(', ')}. ` +
+        `These routes will not have arrival data fetched. Please add them to ROUTE_TO_FEED mapping.`
+      );
+    }
+
+    // Collect all target stop IDs
+    const allTargetStopIds = stationConfigs.flatMap(c => c.stopIds);
+
     const headers: HeadersInit = {};
     if (process.env.MTA_API_KEY) {
       headers['x-api-key'] = process.env.MTA_API_KEY;
     }
 
-    // Fetch both F and G train feeds in parallel
-    const [fResponse, gResponse] = await Promise.all([
-      fetch(MTA_API_URL_F, {
+    // Fetch all needed feeds in parallel
+    const feedPromises = Array.from(neededFeeds).map(async (feedKey) => {
+      const url = FEED_URLS[feedKey];
+      if (!url) return null;
+
+      const response = await fetch(url, {
         headers,
         next: { revalidate: 30 },
-      }),
-      fetch(MTA_API_URL_G, {
-        headers,
-        next: { revalidate: 30 },
-      }),
-    ]);
+      });
 
-    if (!fResponse.ok) {
-      throw new Error(`MTA API error (F train): ${fResponse.status} ${fResponse.statusText}`);
+      if (!response.ok) {
+        throw new Error(`MTA API error (${feedKey}): ${response.status} ${response.statusText}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const feedMessage = transit_realtime.FeedMessage.decode(new Uint8Array(buffer));
+      
+      return { feedKey, feedMessage };
+    });
+
+    const feedResults = await Promise.all(feedPromises);
+    const validFeeds = feedResults.filter((f): f is { feedKey: string; feedMessage: transit_realtime.FeedMessage } => f !== null);
+
+    // Parse all feeds
+    const allArrivals: Array<import('@/lib/subway-parser').TrainArrival> = [];
+    const allAlerts: Array<import('@/lib/subway-parser').ServiceAlert> = [];
+
+    for (const { feedMessage } of validFeeds) {
+      const { arrivals, alerts } = parseGTFSFeed(
+        feedMessage,
+        allTargetStopIds,
+        Array.from(stationRoutes)
+      );
+      allArrivals.push(...arrivals);
+      allAlerts.push(...alerts);
     }
 
-    if (!gResponse.ok) {
-      throw new Error(`MTA API error (G train): ${gResponse.status} ${gResponse.statusText}`);
-    }
-
-    const [fBuffer, gBuffer] = await Promise.all([
-      fResponse.arrayBuffer(),
-      gResponse.arrayBuffer(),
-    ]);
-
-    const fFeedMessage = transit_realtime.FeedMessage.decode(new Uint8Array(fBuffer));
-    const gFeedMessage = transit_realtime.FeedMessage.decode(new Uint8Array(gBuffer));
-
-    // Parse both feeds
-    const { arrivals: fArrivals, alerts: fAlerts } = parseGTFSFeed(fFeedMessage, 'F');
-    const { arrivals: gArrivals, alerts: gAlerts } = parseGTFSFeed(gFeedMessage, 'G');
-
-    // Combine arrivals and sort by arrival time
-    const allArrivals = [...fArrivals, ...gArrivals].sort((a, b) => a.arrivalTime - b.arrivalTime);
-
-    // Combine alerts
-    const allAlerts = [...fAlerts, ...gAlerts];
+    // Sort arrivals by arrival time
+    allArrivals.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
     // Filter alerts to only active ones
     const now = Math.floor(Date.now() / 1000);
@@ -60,7 +173,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      arrivals: allArrivals.slice(0, 10), // Return next 10 trains
+      arrivals: allArrivals,
       alerts: activeAlerts,
       lastUpdated: Math.floor(Date.now() / 1000),
     });
@@ -75,4 +188,3 @@ export async function GET() {
     );
   }
 }
-

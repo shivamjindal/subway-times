@@ -1,0 +1,277 @@
+{
+  "1": {
+    "N": [
+      "137 St-City College",
+      "215 St",
+      "Van Cortlandt Park-242 St"
+    ],
+    "S": [
+      "South Ferry"
+    ]
+  },
+  "2": {
+    "N": [
+      "Wakefield-241 St"
+    ],
+    "S": [
+      "Flatbush Av-Brooklyn College",
+      "New Lots Av"
+    ]
+  },
+  "3": {
+    "N": [
+      "135 St",
+      "Harlem-148 St"
+    ],
+    "S": [
+      "34 St-Penn Station",
+      "New Lots Av"
+    ]
+  },
+  "4": {
+    "N": [
+      "Bedford Park Blvd-Lehman College",
+      "Burnside Av",
+      "Woodlawn"
+    ],
+    "S": [
+      "Bowling Green",
+      "Crown Hts-Utica Av",
+      "New Lots Av"
+    ]
+  },
+  "5": {
+    "N": [
+      "E 180 St",
+      "Eastchester-Dyre Av",
+      "Gun Hill Rd",
+      "Nereid Av"
+    ],
+    "S": [
+      "Bowling Green",
+      "Crown Hts-Utica Av",
+      "E 180 St",
+      "Flatbush Av-Brooklyn College"
+    ]
+  },
+  "6": {
+    "N": [
+      "3 Av-138 St",
+      "Parkchester",
+      "Pelham Bay Park"
+    ],
+    "S": [
+      "Brooklyn Bridge-City Hall"
+    ]
+  },
+  "7": {
+    "N": [
+      "Flushing-Main St",
+      "Mets-Willets Point"
+    ],
+    "S": [
+      "34 St-Hudson Yards"
+    ]
+  },
+  "6X": {
+    "N": [
+      "Pelham Bay Park"
+    ],
+    "S": [
+      "Brooklyn Bridge-City Hall"
+    ]
+  },
+  "7X": {
+    "N": [
+      "Flushing-Main St"
+    ],
+    "S": [
+      "34 St-Hudson Yards"
+    ]
+  },
+  "GS": {
+    "N": [
+      "Times Sq-42 St"
+    ],
+    "S": [
+      "Grand Central-42 St"
+    ]
+  },
+  "A": {
+    "N": [
+      "168 St",
+      "Dyckman St",
+      "Euclid Av",
+      "Inwood-207 St"
+    ],
+    "S": [
+      "Euclid Av",
+      "Far Rockaway-Mott Av",
+      "Ozone Park-Lefferts Blvd",
+      "Rockaway Park-Beach 116 St"
+    ]
+  },
+  "B": {
+    "N": [
+      "145 St",
+      "Bedford Park Blvd",
+      "Kingsbridge Rd"
+    ],
+    "S": [
+      "Brighton Beach"
+    ]
+  },
+  "C": {
+    "N": [
+      "168 St"
+    ],
+    "S": [
+      "Euclid Av"
+    ]
+  },
+  "E": {
+    "N": [
+      "Jamaica Center-Parsons/Archer",
+      "Jamaica-179 St"
+    ],
+    "S": [
+      "World Trade Center"
+    ]
+  },
+  "F": {
+    "N": [
+      "Jamaica-179 St"
+    ],
+    "S": [
+      "Church Av",
+      "Coney Island-Stillwell Av",
+      "Kings Hwy"
+    ]
+  },
+  "FX": {
+    "N": [
+      "Jamaica-179 St"
+    ],
+    "S": [
+      "Coney Island-Stillwell Av"
+    ]
+  },
+  "FS": {
+    "N": [
+      "Franklin Av"
+    ],
+    "S": [
+      "Prospect Park"
+    ]
+  },
+  "G": {
+    "N": [
+      "Court Sq"
+    ],
+    "S": [
+      "Church Av"
+    ]
+  },
+  "H": {
+    "N": [
+      "Broad Channel"
+    ],
+    "S": [
+      "Rockaway Park-Beach 116 St"
+    ]
+  },
+  "J": {
+    "N": [
+      "Broadway Junction",
+      "Jamaica Center-Parsons/Archer"
+    ],
+    "S": [
+      "Broad St"
+    ]
+  },
+  "Z": {
+    "N": [
+      "Jamaica Center-Parsons/Archer"
+    ],
+    "S": [
+      "Broad St"
+    ]
+  },
+  "L": {
+    "N": [
+      "8 Av"
+    ],
+    "S": [
+      "Canarsie-Rockaway Pkwy",
+      "Myrtle-Wyckoff Avs"
+    ]
+  },
+  "M": {
+    "N": [
+      "Delancey St-Essex St",
+      "Forest Hills-71 Av",
+      "Myrtle Av"
+    ],
+    "S": [
+      "Middle Village-Metropolitan Av"
+    ]
+  },
+  "N": {
+    "N": [
+      "96 St",
+      "Astoria-Ditmars Blvd"
+    ],
+    "S": [
+      "Coney Island-Stillwell Av"
+    ]
+  },
+  "W": {
+    "N": [
+      "Astoria-Ditmars Blvd"
+    ],
+    "S": [
+      "86 St",
+      "Bay Pkwy",
+      "Whitehall St-South Ferry"
+    ]
+  },
+  "Q": {
+    "N": [
+      "96 St"
+    ],
+    "S": [
+      "Brighton Beach",
+      "Coney Island-Stillwell Av"
+    ]
+  },
+  "D": {
+    "N": [
+      "Norwood-205 St"
+    ],
+    "S": [
+      "Bay Pkwy",
+      "Coney Island-Stillwell Av"
+    ]
+  },
+  "R": {
+    "N": [
+      "96 St",
+      "Forest Hills-71 Av",
+      "Queens Plaza",
+      "Whitehall St-South Ferry"
+    ],
+    "S": [
+      "Bay Pkwy",
+      "Bay Ridge-95 St"
+    ]
+  },
+  "SI": {
+    "N": [
+      "St George"
+    ],
+    "S": [
+      "Great Kills",
+      "Tottenville"
+    ]
+  }
+}

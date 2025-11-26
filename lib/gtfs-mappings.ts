@@ -272,6 +272,48 @@ export function generateMappings(gtfsDir: string): {
   };
 }
 
+// Generate route headsigns mapping from trips.txt
+export function generateRouteHeadsigns(gtfsDir: string): Record<string, { N: string[]; S: string[] }> {
+  const tripsContent = fs.readFileSync(
+    path.join(gtfsDir, "trips.txt"),
+    "utf-8"
+  );
+
+  const tripsData = parseCSV(tripsContent);
+
+  // Map: routeId -> direction -> Set of headsigns
+  const headsignMap = new Map<string, { N: Set<string>; S: Set<string> }>();
+
+  tripsData.forEach((trip) => {
+    const routeId = trip.route_id;
+    const headsign = trip.trip_headsign;
+    const directionId = trip.direction_id;
+
+    if (!routeId || !headsign) return;
+
+    // direction_id: 0 = northbound (N), 1 = southbound (S)
+    const direction = directionId === "0" ? "N" : "S";
+
+    if (!headsignMap.has(routeId)) {
+      headsignMap.set(routeId, { N: new Set(), S: new Set() });
+    }
+
+    const routeHeadsigns = headsignMap.get(routeId)!;
+    routeHeadsigns[direction].add(headsign);
+  });
+
+  // Convert Sets to Arrays and sort
+  const result: Record<string, { N: string[]; S: string[] }> = {};
+  headsignMap.forEach((headsigns, routeId) => {
+    result[routeId] = {
+      N: Array.from(headsigns.N).sort(),
+      S: Array.from(headsigns.S).sort(),
+    };
+  });
+
+  return result;
+}
+
 // Script to generate and save mappings as JSON
 if (require.main === module) {
   const gtfsDir = path.join(__dirname, "..", "gtfs_subway");
@@ -290,6 +332,11 @@ if (require.main === module) {
     `Stations with routes: ${Object.keys(stationToRoutes).length}`
   );
 
+  // Generate route headsigns
+  console.log("\nGenerating route headsigns...");
+  const routeHeadsigns = generateRouteHeadsigns(gtfsDir);
+  console.log(`Found headsigns for ${Object.keys(routeHeadsigns).length} routes`);
+
   // Save mappings as JSON files
   fs.writeFileSync(
     path.join(outputDir, "route-to-stations.json"),
@@ -299,6 +346,11 @@ if (require.main === module) {
   fs.writeFileSync(
     path.join(outputDir, "station-to-routes.json"),
     JSON.stringify(stationToRoutes, null, 2)
+  );
+
+  fs.writeFileSync(
+    path.join(outputDir, "route-headsigns.json"),
+    JSON.stringify(routeHeadsigns, null, 2)
   );
 
   // Also create simplified versions for quick lookups
@@ -340,6 +392,14 @@ if (require.main === module) {
         .map((r) => r.shortName)
         .join(", ")}`
     );
+  }
+
+  console.log("\n--- Example: Route headsigns ---");
+  const fHeadsigns = routeHeadsigns["F"];
+  if (fHeadsigns) {
+    console.log(`F train headsigns:`);
+    console.log(`  Northbound: ${fHeadsigns.N.join(", ")}`);
+    console.log(`  Southbound: ${fHeadsigns.S.join(", ")}`);
   }
 }
 
