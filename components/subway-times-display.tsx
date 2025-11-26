@@ -466,6 +466,7 @@ export function SubwayTimesDisplay() {
                     arrivals={arrivals}
                     alerts={alerts}
                     onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
+                    showDragHandle={stationConfigs.length > 1}
                   />
                 );
               })}
@@ -490,9 +491,10 @@ interface SortableStationCardProps {
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
+  showDragHandle: boolean;
 }
 
-function SortableStationCard({ config, arrivals, alerts, onDirectionChange }: SortableStationCardProps) {
+function SortableStationCard({ config, arrivals, alerts, onDirectionChange, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -510,13 +512,15 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange }: So
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-start gap-2">
-      <div
-        {...attributes}
-        {...listeners}
-        className="mt-6 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-      >
-        <GripVertical className="h-5 w-5" />
-      </div>
+      {showDragHandle && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="mt-6 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+        >
+          <GripVertical className="h-5 w-5" />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <StationCard
           stationId={config.stationId}
