@@ -137,6 +137,8 @@ export function SubwayTimesDisplay() {
     
     if (currentStationIds.length === 0) {
       setData({ arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) });
+      setError(null);
+      setRefreshing(false);
       setLoading(false);
       hasDataRef.current = false;
       return;
