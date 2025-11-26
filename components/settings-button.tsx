@@ -24,8 +24,17 @@ function subscribeToWeatherVisible(callback: () => void): () => void {
       callback();
     }
   };
+  const handleVisibilityChange = () => {
+    callback();
+  };
+
   window.addEventListener('storage', handleStorageChange);
-  return () => window.removeEventListener('storage', handleStorageChange);
+  window.addEventListener('weatherCardVisibilityChange', handleVisibilityChange);
+
+  return () => {
+    window.removeEventListener('storage', handleStorageChange);
+    window.removeEventListener('weatherCardVisibilityChange', handleVisibilityChange);
+  };
 }
 
 export function SettingsButton() {
