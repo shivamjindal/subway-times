@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { transit_realtime } from 'gtfs-realtime-bindings';
 import { parseGTFSFeed } from '@/lib/subway-parser';
 import { getRoutesForStation, getStation } from '@/lib/subway-data';
+import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
 
 // Map routes to MTA feed groups
 const ROUTE_TO_FEED: Record<string, string> = {
@@ -47,22 +48,46 @@ const FEED_URLS: Record<string, string> = {
   'si': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si',
 };
 
+const DEFAULT_STATION_IDS = ['F24'];
+const MAX_STATIONS_PER_REQUEST = 10;
+const STATION_ID_REGEX = /^[A-Z0-9]{1,5}$/;
+const FEED_REQUEST_TIMEOUT_MS = 10000;
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const stationsParam = searchParams.get('stations');
-    
-    // Default to F24 (7th Ave Brooklyn) for backward compatibility
-    const stationIds = stationsParam 
-      ? stationsParam.split(',').map(s => s.trim()).filter(Boolean)
-      : ['F24'];
 
-    if (stationIds.length === 0) {
-      return NextResponse.json({
-        arrivals: [],
-        alerts: [],
-        lastUpdated: Math.floor(Date.now() / 1000),
-      });
+    const rawStationIds = stationsParam
+      ? stationsParam.split(',').map((s) => s.trim()).filter(Boolean)
+      : DEFAULT_STATION_IDS;
+
+    // Maintain backward compatibility by falling back to default when stations param is empty
+    const normalizedStationIds = (rawStationIds.length > 0 ? rawStationIds : DEFAULT_STATION_IDS)
+      .map((id) => id.toUpperCase());
+
+    const stationIds = Array.from(new Set(normalizedStationIds));
+
+    if (stationIds.length > MAX_STATIONS_PER_REQUEST) {
+      return NextResponse.json(
+        {
+          error: 'Too many stations requested',
+          message: `Requests are limited to ${MAX_STATIONS_PER_REQUEST} stations at a time.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const malformedStationIds = stationIds.filter((id) => !STATION_ID_REGEX.test(id));
+    if (malformedStationIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Invalid station IDs provided',
+          message: 'Station IDs must be 1-5 alphanumeric characters (e.g., F24).',
+          invalidStations: malformedStationIds,
+        },
+        { status: 400 }
+      );
     }
 
     // Build map of station -> routes and stop IDs
@@ -71,10 +96,14 @@ export async function GET(request: Request) {
       stopIds: string[];
       routes: string[];
     }> = [];
+    const unknownStationIds: string[] = [];
 
     for (const stationId of stationIds) {
       const station = getStation(stationId);
-      if (!station) continue;
+      if (!station) {
+        unknownStationIds.push(stationId);
+        continue;
+      }
 
       const routes = getRoutesForStation(stationId);
       const routeIds = routes.map(r => r.routeId);
@@ -87,6 +116,23 @@ export async function GET(request: Request) {
         stopIds,
         routes: routeIds,
       });
+    }
+
+    if (stationConfigs.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'No valid stations found',
+          message: 'None of the requested station IDs match known stations.',
+          invalidStations: unknownStationIds,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (unknownStationIds.length > 0) {
+      console.warn(
+        `Ignoring unknown station IDs: ${unknownStationIds.join(', ')}`
+      );
     }
 
     // Determine which feeds we need
@@ -128,9 +174,10 @@ export async function GET(request: Request) {
       const url = FEED_URLS[feedKey];
       if (!url) return null;
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers,
         next: { revalidate: 30 },
+        timeoutMs: FEED_REQUEST_TIMEOUT_MS,
       });
 
       if (!response.ok) {
