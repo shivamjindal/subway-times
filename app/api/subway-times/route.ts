@@ -166,10 +166,6 @@ export async function GET(request: Request) {
 
     // Collect all target stop IDs
     const allTargetStopIds = stationConfigs.flatMap(c => c.stopIds);
-    
-    // #region agent log
-    await fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:169',message:'Feed determination',data:{requestedStationIds:JSON.stringify(stationIds),stationConfigs:JSON.stringify(stationConfigs.map(c=>({stationId:c.stationId,routes:c.routes}))),neededFeeds:JSON.stringify(Array.from(neededFeeds)),stationRoutes:JSON.stringify(Array.from(stationRoutes)),allTargetStopIds:JSON.stringify(allTargetStopIds)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
 
     const headers: HeadersInit = {};
     if (process.env.MTA_API_KEY) {
@@ -180,10 +176,6 @@ export async function GET(request: Request) {
     const feedPromises = Array.from(neededFeeds).map(async (feedKey) => {
       const url = FEED_URLS[feedKey];
       if (!url) return null;
-
-      // #region agent log
-      await fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:175',message:'About to fetch feed',data:{feedKey,url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
 
       const response = await fetchWithTimeout(url, {
         headers,
@@ -198,10 +190,6 @@ export async function GET(request: Request) {
       const buffer = await response.arrayBuffer();
       const feedMessage = transit_realtime.FeedMessage.decode(new Uint8Array(buffer));
       
-      // #region agent log
-      await fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:189',message:'Feed fetched',data:{feedKey,entityCount:feedMessage.entity?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      
       return { feedKey, feedMessage };
     });
 
@@ -213,17 +201,11 @@ export async function GET(request: Request) {
     const alertsById = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
 
     for (const { feedKey, feedMessage } of validFeeds) {
-      // #region agent log
-      await fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:201',message:'About to parse feed',data:{feedKey,targetStopIds:JSON.stringify(allTargetStopIds),stationRoutes:JSON.stringify(Array.from(stationRoutes))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       const { arrivals, alerts } = parseGTFSFeed(
         feedMessage,
         allTargetStopIds,
         Array.from(stationRoutes)
       );
-      // #region agent log
-      await fetch('http://127.0.0.1:7242/ingest/ce89324c-5311-4a23-97e3-d4ac7c389b69',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'route.ts:207',message:'Feed parsed',data:{feedKey,arrivalsCount:arrivals.length,arrivalsByStation:Object.keys(arrivals.reduce((acc:Record<string,number>,arr:any)=>{acc[arr.stationId]=(acc[arr.stationId]||0)+1;return acc;},{})),stationIdsInArrivals:JSON.stringify([...new Set(arrivals.map(a=>a.stationId))])},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       allArrivals.push(...arrivals);
       
       // Deduplicate alerts by ID
