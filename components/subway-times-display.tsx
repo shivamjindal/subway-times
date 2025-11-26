@@ -104,12 +104,15 @@ export function SubwayTimesDisplay() {
 
   // Save stations to localStorage whenever they change
   useEffect(() => {
-    if (stationConfigs.length > 0) {
-      try {
+    try {
+      if (stationConfigs.length > 0) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(stationConfigs));
-      } catch (err) {
-        console.error('Error saving stations to localStorage:', err);
+      } else {
+        // Clear localStorage when all stations are removed
+        localStorage.removeItem(STORAGE_KEY);
       }
+    } catch (err) {
+      console.error('Error saving stations to localStorage:', err);
     }
   }, [stationConfigs]);
 

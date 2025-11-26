@@ -195,7 +195,7 @@ export async function GET(request: Request) {
 
     // Parse all feeds
     const allArrivals: Array<import('@/lib/subway-parser').TrainArrival> = [];
-    const allAlerts: Array<import('@/lib/subway-parser').ServiceAlert> = [];
+    const alertsById = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
 
     for (const { feedMessage } of validFeeds) {
       const { arrivals, alerts } = parseGTFSFeed(
@@ -204,8 +204,16 @@ export async function GET(request: Request) {
         Array.from(stationRoutes)
       );
       allArrivals.push(...arrivals);
-      allAlerts.push(...alerts);
+      
+      // Deduplicate alerts by ID
+      for (const alert of alerts) {
+        if (!alertsById.has(alert.id)) {
+          alertsById.set(alert.id, alert);
+        }
+      }
     }
+
+    const allAlerts = Array.from(alertsById.values());
 
     // Sort arrivals by arrival time
     allArrivals.sort((a, b) => a.arrivalTime - b.arrivalTime);
