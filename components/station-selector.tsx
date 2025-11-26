@@ -4,6 +4,23 @@ import { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { getStation, getRoutesForStation, getRouteColor, searchStationsByName, type Station } from '@/lib/subway-data';
 import { X } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface StationSelectorProps {
   selectedStations: string[];
@@ -34,6 +51,26 @@ export function StationSelector({ selectedStations, onStationsChange }: StationS
     e?.stopPropagation();
     onStationsChange(selectedStations.filter(id => id !== stationId));
   };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = selectedStations.indexOf(active.id as string);
+      const newIndex = selectedStations.indexOf(over.id as string);
+      
+      if (oldIndex >= 0 && newIndex >= 0) {
+        onStationsChange(arrayMove(selectedStations, oldIndex, newIndex));
+      }
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const selectedStationData = useMemo(() => {
     return selectedStations
@@ -124,55 +161,107 @@ export function StationSelector({ selectedStations, onStationsChange }: StationS
 
       {/* Selected Stations */}
       {selectedStationData.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {selectedStationData.map((station) => {
-            const routes = getRoutesForStation(station.stopId);
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={selectedStations}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+              {selectedStationData.map((station) => {
+                const routes = getRoutesForStation(station.stopId);
+                return (
+                  <SortableStationCard
+                    key={station.stopId}
+                    stationId={station.stopId}
+                    station={station}
+                    routes={routes}
+                    onRemove={handleRemoveStation}
+                    canDrag={selectedStations.length > 1}
+                  />
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+    </div>
+  );
+}
+
+interface SortableStationCardProps {
+  stationId: string;
+  station: Station;
+  routes: ReturnType<typeof getRoutesForStation>;
+  onRemove: (stationId: string, e?: React.MouseEvent) => void;
+  canDrag: boolean;
+}
+
+function SortableStationCard({ stationId, station, routes, onRemove, canDrag }: SortableStationCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stationId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border flex-shrink-0 min-w-fit ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      {...(canDrag ? { ...attributes, ...listeners } : {})}
+    >
+      <div>
+        <div className="font-medium text-sm whitespace-nowrap">{station.name}</div>
+        <div className="flex gap-1 mt-1 flex-wrap">
+          {routes.map((route) => {
+            const color = getRouteColor(route.routeId);
             return (
-              <div
-                key={station.stopId}
-                className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg border"
+              <Badge
+                key={route.routeId}
+                className="text-xs"
+                style={{
+                  backgroundColor: `#${color}`,
+                  color: route.textColor === 'FFFFFF' ? 'white' : 'black',
+                }}
               >
-                <div>
-                  <div className="font-medium text-sm">{station.name}</div>
-                  <div className="flex gap-1 mt-1">
-                    {routes.map((route) => {
-                      const color = getRouteColor(route.routeId);
-                      return (
-                        <Badge
-                          key={route.routeId}
-                          className="text-xs"
-                          style={{
-                            backgroundColor: `#${color}`,
-                            color: route.textColor === 'FFFFFF' ? 'white' : 'black',
-                          }}
-                        >
-                          {route.shortName}
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleRemoveStation(station.stopId, e);
-                  }}
-                  className="ml-2 p-1 hover:bg-background rounded transition-colors"
-                  aria-label={`Remove ${station.name}`}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+                {route.shortName}
+              </Badge>
             );
           })}
         </div>
-      )}
+      </div>
+      <button
+        type="button"
+        onPointerDown={(e) => {
+          e.stopPropagation();
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onRemove(stationId, e);
+        }}
+        className="ml-2 p-1 hover:bg-background rounded transition-colors flex-shrink-0"
+        aria-label={`Remove ${station.name}`}
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   );
 }

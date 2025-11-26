@@ -25,7 +25,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
 
 interface StationConfig {
   stationId: string;
@@ -305,7 +304,11 @@ export function SubwayTimesDisplay() {
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -530,17 +533,15 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange, show
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-start gap-2">
-      {showDragHandle && (
-        <div
-          {...attributes}
-          {...listeners}
-          className="mt-6 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-        >
-          <GripVertical className="h-5 w-5" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="w-full"
+    >
+      <div 
+        className={showDragHandle ? "cursor-grab active:cursor-grabbing" : ""}
+        {...(showDragHandle ? { ...attributes, ...listeners } : {})}
+      >
         <StationCard
           stationId={config.stationId}
           arrivals={arrivals}

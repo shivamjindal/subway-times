@@ -87,6 +87,12 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+            }}
             className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0"
             aria-label={isCollapsed ? 'Expand station' : 'Collapse station'}
           >
@@ -100,6 +106,12 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
             <button
               type="button"
               onClick={() => onDirectionChange('all')}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
               className={`px-3 py-1 text-sm rounded transition-colors ${
                 direction === 'all'
                   ? 'bg-primary text-primary-foreground'
@@ -112,6 +124,12 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
               <button
                 type="button"
                 onClick={() => onDirectionChange('N')}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
                 className={`px-3 py-1 text-sm rounded transition-colors ${
                   direction === 'N'
                     ? 'bg-primary text-primary-foreground'
@@ -125,6 +143,12 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
               <button
                 type="button"
                 onClick={() => onDirectionChange('S')}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
                 className={`px-3 py-1 text-sm rounded transition-colors ${
                   direction === 'S'
                     ? 'bg-primary text-primary-foreground'
@@ -207,6 +231,12 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
               <button
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
                 className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
               >
                 {isExpanded ? (
