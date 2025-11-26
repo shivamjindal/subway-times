@@ -57,8 +57,8 @@ interface WeatherData {
     isDaytime: boolean;
   };
   today: {
-    high: number;
-    low: number;
+    high: number | null;
+    low: number | null;
     condition: string;
     windSpeed: string;
     windDirection: string;
@@ -257,6 +257,13 @@ export function SubwayTimesDisplay() {
     });
   };
 
+  const formatTemperatureValue = (value: number | null | undefined) => {
+    if (value === null || value === undefined) {
+      return '--°F';
+    }
+    return `${value}°F`;
+  };
+
   const handleStationsChange = (stationIds: string[]) => {
     // Add new stations with default direction 'all'
     const newConfigs: StationConfig[] = stationIds.map(id => {
@@ -395,7 +402,7 @@ export function SubwayTimesDisplay() {
               </div>
               <div className="space-y-1 text-right">
                 <div className="text-base font-semibold">
-                  H: {weather.today.high}°F / L: {weather.today.low}°F
+                  H: {formatTemperatureValue(weather.today.high)} / L: {formatTemperatureValue(weather.today.low)}
                 </div>
                 <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                   <Wind className="h-4 w-4" />

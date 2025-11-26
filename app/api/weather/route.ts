@@ -148,6 +148,10 @@ export async function GET(request: Request) {
     // Get current conditions from hourly forecast
     const currentHour = hourlyPeriods[0];
 
+    // Ensure we always return either a number or explicit null to match UI expectations
+    const resolvedTodayHigh = todayHigh ?? currentHour?.temperature ?? todayPeriod.temperature ?? null;
+    const resolvedTodayLow = todayLow ?? currentHour?.temperature ?? todayPeriod.temperature ?? null;
+
     // Extract wind information
     const windSpeed = currentHour.windSpeed || todayPeriod.windSpeed || 'N/A';
     const windDirection = currentHour.windDirection || todayPeriod.windDirection || 'N/A';
@@ -180,8 +184,8 @@ export async function GET(request: Request) {
         isDaytime: currentHour.isDaytime ?? todayPeriod.isDaytime,
       },
       today: {
-        high: todayHigh,
-        low: todayLow,
+        high: resolvedTodayHigh,
+        low: resolvedTodayLow,
         condition: todayPeriod.shortForecast,
         windSpeed: todayPeriod.windSpeed,
         windDirection: todayPeriod.windDirection,
