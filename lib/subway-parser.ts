@@ -135,7 +135,7 @@ export function parseGTFSFeed(
 
     if (entity.alert) {
       const alert = entity.alert;
-      
+
       // Collect alerts for any route (or filter if specified)
       const isForRoute = !routeFilter || alert.informedEntity?.some(
         (informedEntity) => informedEntity.routeId && routeFilter.includes(informedEntity.routeId)

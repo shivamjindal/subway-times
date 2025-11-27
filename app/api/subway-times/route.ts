@@ -48,6 +48,8 @@ const FEED_URLS: Record<string, string> = {
   'si': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si',
 };
 
+const ALERTS_FEED_URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts';
+
 const DEFAULT_STATION_IDS = ['F24'];
 const MAX_STATIONS_PER_REQUEST = 10;
 const STATION_ID_REGEX = /^[A-Z0-9]{1,5}$/;
@@ -196,18 +198,49 @@ export async function GET(request: Request) {
     const feedResults = await Promise.all(feedPromises);
     const validFeeds = feedResults.filter((f): f is { feedKey: string; feedMessage: transit_realtime.FeedMessage } => f !== null);
 
+    // Fetch the dedicated subway alerts feed
+    const alertsResponse = await fetchWithTimeout(ALERTS_FEED_URL, {
+      headers,
+      next: { revalidate: 30 },
+      timeoutMs: FEED_REQUEST_TIMEOUT_MS,
+    });
+
+    let alertsFeed: transit_realtime.FeedMessage | null = null;
+    if (alertsResponse.ok) {
+      const alertsBuffer = await alertsResponse.arrayBuffer();
+      alertsFeed = transit_realtime.FeedMessage.decode(new Uint8Array(alertsBuffer));
+    } else {
+      console.warn(`Failed to fetch alerts feed: ${alertsResponse.status} ${alertsResponse.statusText}`);
+    }
+
     // Parse all feeds
     const allArrivals: Array<import('@/lib/subway-parser').TrainArrival> = [];
     const alertsById = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
 
-    for (const { feedKey, feedMessage } of validFeeds) {
+    for (const { feedMessage } of validFeeds) {
       const { arrivals, alerts } = parseGTFSFeed(
         feedMessage,
         allTargetStopIds,
         Array.from(stationRoutes)
       );
       allArrivals.push(...arrivals);
-      
+
+      // Deduplicate alerts by ID
+      for (const alert of alerts) {
+        if (!alertsById.has(alert.id)) {
+          alertsById.set(alert.id, alert);
+        }
+      }
+    }
+
+    // Parse alerts from the dedicated alerts feed
+    if (alertsFeed) {
+      const { alerts } = parseGTFSFeed(
+        alertsFeed,
+        allTargetStopIds,
+        Array.from(stationRoutes)
+      );
+
       // Deduplicate alerts by ID
       for (const alert of alerts) {
         if (!alertsById.has(alert.id)) {
