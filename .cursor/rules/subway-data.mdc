@@ -1,20 +1,23 @@
 ---
-description: Use this rule when working with MTA subway route/station data, GTFS mappings, or building features that need train line or station information
+description: Use this rule when working with MTA subway route/station data, GTFS mappings, service alerts, or building features that need train line or station information
 globs:
   - lib/subway-data.ts
   - lib/gtfs-mappings.ts
+  - lib/subway-parser.ts
   - lib/*.json
   - "**/subway*"
   - "**/station*"
   - "**/route*"
+  - "**/alert*"
 ---
 
 # MTA Subway Data Utility
 
-This project includes comprehensive mappings of MTA NYC subway routes and stations, parsed from GTFS static data.
+This project includes comprehensive mappings of MTA NYC subway routes and stations, parsed from GTFS static data, plus real-time arrival and service alert parsing.
 
 ## Key Files
 
+### Static Data
 - `lib/subway-data.ts` - Main utility module with helper functions (use this!)
 - `lib/gtfs-mappings.ts` - Script to regenerate JSON mappings from GTFS data
 - `lib/route-to-stations.json` - Full route→stations mapping
@@ -22,6 +25,10 @@ This project includes comprehensive mappings of MTA NYC subway routes and statio
 - `lib/simple-route-to-stations.json` - Simple route_id→[stop_ids] lookup
 - `lib/simple-station-to-routes.json` - Simple stop_id→[route_ids] lookup
 - `gtfs_subway/` - Raw GTFS static data files
+
+### Real-Time Data
+- `lib/subway-parser.ts` - GTFS-Realtime parser for arrivals and service alerts
+- `app/api/subway-times/route.ts` - API endpoint that fetches and parses MTA feeds
 
 ## Data Available
 
@@ -104,6 +111,8 @@ const displayName = getRouteDisplayName('GS'); // Returns "S"
 
 ## Types
 
+### Static Data Types
+
 ```typescript
 interface Station {
   stopId: string;    // e.g., "127", "A24"
@@ -121,6 +130,69 @@ interface Route {
 }
 ```
 
+### Real-Time Data Types
+
+```typescript
+interface TrainArrival {
+  tripId: string;
+  routeId: string;
+  stopId: string;           // With N/S suffix, e.g., "F24N"
+  stationId: string;        // Parent station ID without suffix
+  direction: 'N' | 'S';     // N = northbound, S = southbound
+  arrivalTime: number;      // Unix timestamp in seconds
+  arrivalTimeSeconds: number; // Seconds until arrival
+  destination: string;      // Headsign or destination
+  trainId?: string;
+}
+
+interface ServiceAlert {
+  id: string;
+  headerText: string;
+  descriptionText: string;
+  activePeriods: Array<{ start: number; end?: number }>;
+  affectedRoutes: string[];  // Route IDs this alert affects
+}
+```
+
+## MTA Real-Time Data
+
+### Feed URLs
+
+The MTA provides separate GTFS-Realtime feeds:
+
+**Train arrival feeds (by line group):**
+- ACE: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace`
+- BDFM: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm`
+- G: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g`
+- JZ: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-jz`
+- NQRW: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw`
+- L: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l`
+- 1234567: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs`
+- SI: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si`
+
+**Service alerts feed (all lines):**
+- Subway alerts: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts`
+
+### Service Alert Filtering
+
+Service alerts include an `affectedRoutes` array that lists which train lines are affected. When displaying alerts:
+
+1. **Filter by station routes**: Only show alerts that affect routes serving that station
+2. **Respect user route selection**: If user selects specific routes, only show alerts for those routes
+3. **System-wide alerts**: Alerts with empty `affectedRoutes` should be shown to all stations
+
+Example filtering logic:
+```typescript
+// Filter alerts for a station with selected routes
+const stationRoutes = getRoutesForStation(stationId).map(r => r.routeId);
+const routesToMatch = selectedRoutes.length > 0 ? selectedRoutes : stationRoutes;
+
+const relevantAlerts = alerts.filter(alert => {
+  if (alert.affectedRoutes.length === 0) return true; // System-wide
+  return alert.affectedRoutes.some(routeId => routesToMatch.includes(routeId));
+});
+```
+
 ## Important Notes
 
 1. **Station IDs are platform-specific**: The same station complex (e.g., Times Sq) has multiple stop_ids for different train lines. Use `getAllRoutesAtStationComplex(name)` to aggregate.
@@ -130,6 +202,10 @@ interface Route {
 3. **Shuttle routes**: GS = 42 St Shuttle, FS = Franklin Ave Shuttle, H = Rockaway Shuttle. All display as "S".
 
 4. **Route colors**: Use `ROUTE_LINE_COLORS` constant or `getRouteColor()` for consistent MTA branding colors.
+
+5. **Service alerts are in a separate feed**: Don't expect alerts in the line-specific feeds. Always fetch from the dedicated subway-alerts feed.
+
+6. **Alert active periods**: Only show alerts where current time is within their `activePeriods` range.
 
 ## Regenerating Mappings
 

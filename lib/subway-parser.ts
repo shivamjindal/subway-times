@@ -22,6 +22,7 @@ export interface ServiceAlert {
   headerText: string;
   descriptionText: string;
   activePeriods: Array<{ start: number; end?: number }>;
+  affectedRoutes: string[]; // Route IDs affected by this alert
 }
 
 // Helper to convert Long to number
@@ -156,11 +157,19 @@ export function parseGTFSFeed(
               end: period.end ? longToNumber(period.end) : undefined,
             }));
 
+            // Extract affected route IDs from informedEntity
+            const affectedRoutes = Array.from(new Set(
+              (alert.informedEntity || [])
+                .map(ie => ie.routeId)
+                .filter((id): id is string => Boolean(id))
+            ));
+
             alerts.push({
               id: entity.id || '',
               headerText: headerTranslation.text,
               descriptionText: descriptionTranslation?.text || '',
               activePeriods,
+              affectedRoutes,
             });
           }
         }

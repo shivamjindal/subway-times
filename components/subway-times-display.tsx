@@ -423,17 +423,37 @@ export function SubwayTimesDisplay() {
     return grouped;
   }, [data]);
 
-  // Group alerts by station (simplified - show all alerts for all stations)
+  // Group alerts by station, filtering by routes at each station
   const alertsByStation = useMemo(() => {
     if (!data) return {};
-    
+
     const grouped: Record<string, ServiceAlert[]> = {};
-    selectedStationIds.forEach(stationId => {
-      grouped[stationId] = data.alerts;
+
+    stationConfigs.forEach(config => {
+      const stationId = config.stationId;
+      const stationRoutes = getRoutesForStation(stationId).map(r => r.routeId);
+
+      // Get the routes to filter by (selected routes or all routes at station)
+      const routesToMatch = config.selectedRoutes && config.selectedRoutes.length > 0
+        ? config.selectedRoutes
+        : stationRoutes;
+
+      // Filter alerts to only those affecting routes at this station
+      const stationAlerts = data.alerts.filter(alert => {
+        // If alert has no affected routes specified, it's system-wide (show it)
+        if (alert.affectedRoutes.length === 0) {
+          return true;
+        }
+
+        // Otherwise, check if any affected route matches the routes we care about
+        return alert.affectedRoutes.some(routeId => routesToMatch.includes(routeId));
+      });
+
+      grouped[stationId] = stationAlerts;
     });
-    
+
     return grouped;
-  }, [data, selectedStationIds]);
+  }, [data, stationConfigs]);
 
   if (loading) {
     return (
