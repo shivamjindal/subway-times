@@ -198,19 +198,23 @@ export async function GET(request: Request) {
     const feedResults = await Promise.all(feedPromises);
     const validFeeds = feedResults.filter((f): f is { feedKey: string; feedMessage: transit_realtime.FeedMessage } => f !== null);
 
-    // Fetch the dedicated subway alerts feed
-    const alertsResponse = await fetchWithTimeout(ALERTS_FEED_URL, {
-      headers,
-      next: { revalidate: 30 },
-      timeoutMs: FEED_REQUEST_TIMEOUT_MS,
-    });
-
     let alertsFeed: transit_realtime.FeedMessage | null = null;
-    if (alertsResponse.ok) {
-      const alertsBuffer = await alertsResponse.arrayBuffer();
-      alertsFeed = transit_realtime.FeedMessage.decode(new Uint8Array(alertsBuffer));
-    } else {
-      console.warn(`Failed to fetch alerts feed: ${alertsResponse.status} ${alertsResponse.statusText}`);
+    try {
+      // Fetch the dedicated subway alerts feed
+      const alertsResponse = await fetchWithTimeout(ALERTS_FEED_URL, {
+        headers,
+        next: { revalidate: 30 },
+        timeoutMs: FEED_REQUEST_TIMEOUT_MS,
+      });
+
+      if (alertsResponse.ok) {
+        const alertsBuffer = await alertsResponse.arrayBuffer();
+        alertsFeed = transit_realtime.FeedMessage.decode(new Uint8Array(alertsBuffer));
+      } else {
+        console.warn(`Failed to fetch alerts feed: ${alertsResponse.status} ${alertsResponse.statusText}`);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch alerts feed due to network error', error);
     }
 
     // Parse all feeds
