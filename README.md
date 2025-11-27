@@ -45,7 +45,6 @@ A modern Next.js web application that displays real-time NYC subway arrival time
 ### Prerequisites
 
 - Node.js 20+ and npm
-- MTA API key (free from [https://api.mta.info/](https://api.mta.info/))
 
 ### Installation
 
