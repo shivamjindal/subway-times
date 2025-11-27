@@ -220,6 +220,24 @@ export async function GET(request: Request) {
     // Parse all feeds
     const allArrivals: Array<import('@/lib/subway-parser').TrainArrival> = [];
     const alertsById = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
+    // Also deduplicate by content to catch alerts with different IDs but same content
+    const alertsByContent = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
+
+    // Helper function to create a content-based key for deduplication
+    const getAlertContentKey = (alert: import('@/lib/subway-parser').ServiceAlert): string => {
+      // Normalize text by trimming, lowercasing, and collapsing whitespace for comparison
+      // We deduplicate by text only - if the text is identical, it's the same alert
+      // regardless of which routes are affected (routes are just metadata)
+      const normalizeText = (text: string): string => {
+        return (text || '')
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' '); // Collapse multiple whitespace into single space
+      };
+      const header = normalizeText(alert.headerText);
+      const description = normalizeText(alert.descriptionText);
+      return `${header}|${description}`;
+    };
 
     for (const { feedMessage } of validFeeds) {
       const { arrivals, alerts } = parseGTFSFeed(
@@ -229,10 +247,14 @@ export async function GET(request: Request) {
       );
       allArrivals.push(...arrivals);
 
-      // Deduplicate alerts by ID
+      // Deduplicate alerts by ID and content
       for (const alert of alerts) {
-        if (!alertsById.has(alert.id)) {
+        const contentKey = getAlertContentKey(alert);
+        
+        // Check if we've seen this alert by ID or content
+        if (!alertsById.has(alert.id) && !alertsByContent.has(contentKey)) {
           alertsById.set(alert.id, alert);
+          alertsByContent.set(contentKey, alert);
         }
       }
     }
@@ -245,10 +267,14 @@ export async function GET(request: Request) {
         Array.from(stationRoutes)
       );
 
-      // Deduplicate alerts by ID
+      // Deduplicate alerts by ID and content
       for (const alert of alerts) {
-        if (!alertsById.has(alert.id)) {
+        const contentKey = getAlertContentKey(alert);
+        
+        // Check if we've seen this alert by ID or content
+        if (!alertsById.has(alert.id) && !alertsByContent.has(contentKey)) {
           alertsById.set(alert.id, alert);
+          alertsByContent.set(contentKey, alert);
         }
       }
     }

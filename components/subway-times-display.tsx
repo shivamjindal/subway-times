@@ -439,7 +439,7 @@ export function SubwayTimesDisplay() {
         : stationRoutes;
 
       // Filter alerts to only those affecting routes at this station
-      const stationAlerts = data.alerts.filter(alert => {
+      const filteredAlerts = data.alerts.filter(alert => {
         // If alert has no affected routes specified, it's system-wide (show it)
         if (alert.affectedRoutes.length === 0) {
           return true;
@@ -447,6 +447,30 @@ export function SubwayTimesDisplay() {
 
         // Otherwise, check if any affected route matches the routes we care about
         return alert.affectedRoutes.some(routeId => routesToMatch.includes(routeId));
+      });
+
+      // Deduplicate alerts by content (header + description) to prevent showing the same alert twice
+      // This handles cases where MTA assigns different IDs to the same alert content
+      // We deduplicate by text only - if the text is identical, it's the same alert
+      const normalizeText = (text: string): string => {
+        return (text || '')
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' '); // Collapse multiple whitespace into single space
+      };
+      const seenContent = new Set<string>();
+      const stationAlerts = filteredAlerts.filter(alert => {
+        // Create a content-based key for deduplication (matching API logic)
+        const header = normalizeText(alert.headerText);
+        const description = normalizeText(alert.descriptionText);
+        const contentKey = `${header}|${description}`;
+        
+        if (seenContent.has(contentKey)) {
+          return false; // Already seen this content
+        }
+        
+        seenContent.add(contentKey);
+        return true;
       });
 
       grouped[stationId] = stationAlerts;
