@@ -1,0 +1,207 @@
+/* Retro UI Stylesheet - Amber Monochrome CRT Terminal Style */
+
+@keyframes splitFlap {
+  0% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: rotateX(90deg);
+    opacity: 0.7;
+  }
+  100% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
+.retro {
+  /* Color Palette - Enhanced Retro with more contrast and saturation */
+  --background: oklch(0.06 0 0); /* Very deep black for contrast */
+  --foreground: oklch(0.8 0.35 70); /* Bright, saturated amber */
+  --card: oklch(0.1 0.01 50); /* Very dark card background */
+  --card-foreground: oklch(0.8 0.35 70); /* Bright amber text */
+  --primary: oklch(0.8 0.35 70); /* Bright amber primary */
+  --primary-foreground: oklch(0.06 0 0); /* Black text on amber */
+  --muted: oklch(0.2 0.05 60); /* Darker muted with more saturation */
+  --muted-foreground: oklch(0.65 0.25 70); /* Medium amber for muted text */
+  --accent: oklch(0.85 0.4 85); /* Bright golden accent */
+  --border: oklch(0.4 0.2 60); /* Brighter orange-brown borders */
+  --destructive: oklch(0.6 0.25 30); /* Brighter red for alerts */
+  --destructive-foreground: oklch(0.95 0.02 0); /* Light text on red */
+
+  /* Remove all box shadows */
+  --shadow: none;
+}
+
+.retro * {
+  box-shadow: none !important;
+}
+
+/* Allow subtle shadows on badges for contrast */
+.retro [class*="badge"],
+.retro [class*="Badge"] {
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Card styling in retro mode */
+.retro .bg-card,
+.retro [class*="bg-card"] {
+  background-color: oklch(0.12 0.02 50) !important;
+}
+
+.retro .text-card-foreground,
+.retro [class*="text-card"] {
+  color: oklch(0.8 0.35 70) !important;
+}
+
+/* Scan lines effect - more visible for retro aesthetic */
+.retro::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.25),
+    rgba(0, 0, 0, 0.25) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Border styling - thicker borders with better contrast */
+.retro .border {
+  border: 2px solid oklch(0.4 0.2 60) !important;
+  border-radius: 0 !important;
+}
+
+.retro .rounded-lg,
+.retro .rounded-xl,
+.retro .rounded {
+  border-radius: 0 !important;
+}
+
+/* Card borders */
+.retro .bg-background {
+  background-color: oklch(0.08 0 0) !important;
+}
+
+.retro [class*="bg-muted"]:not([style*="backgroundColor"]) {
+  background-color: oklch(0.15 0.02 50) !important;
+}
+
+/* Monospace font for time displays */
+.retro .font-bold,
+.retro [class*="text-2xl"],
+.retro [class*="text-3xl"] {
+  font-family: var(--font-geist-mono, monospace) !important;
+  letter-spacing: 0.05em;
+}
+
+/* Hover effects - reduce transitions in retro mode */
+.retro .transition-all,
+.retro .transition-colors,
+.retro .transition-opacity {
+  transition: none !important;
+}
+
+/* Badge styling - preserve route colors with enhanced contrast */
+.retro [class*="badge"] {
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 0 !important;
+}
+
+.retro .bg-primary {
+  background-color: oklch(0.8 0.35 70);
+  border: 2px solid oklch(0.8 0.35 70) !important;
+  border-radius: 0 !important;
+  color: oklch(0.06 0 0) !important;
+}
+
+/* Split-flap animation for time displays */
+.split-flap-animate {
+  animation: splitFlap 0.5s ease-in-out;
+  perspective: 1000px;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* Retro button styling - enhanced contrast */
+.retro button {
+  border-radius: 0 !important;
+  border: 2px solid oklch(0.4 0.2 60) !important;
+  transition: none !important;
+  background-color: oklch(0.15 0.05 60) !important;
+  color: oklch(0.8 0.35 70) !important;
+}
+
+.retro button:hover {
+  background-color: oklch(0.25 0.05 60) !important;
+  transform: none !important;
+  border-color: oklch(0.8 0.35 70) !important;
+}
+
+.retro button:active {
+  background-color: oklch(0.35 0.05 60) !important;
+  transform: none !important;
+}
+
+/* Alert styling */
+.retro .bg-destructive {
+  background-color: oklch(0.4 0.2 25) !important;
+  border: 2px solid oklch(0.4 0.2 25) !important;
+}
+
+/* Text styling - ensure bright amber text throughout */
+.retro {
+  color: oklch(0.8 0.35 70);
+}
+
+.retro .text-foreground {
+  color: oklch(0.8 0.35 70) !important;
+}
+
+.retro .text-muted-foreground {
+  color: oklch(0.65 0.25 70) !important;
+}
+
+.retro .bg-muted\/50,
+.retro .bg-muted {
+  background-color: oklch(0.15 0.05 60) !important;
+  color: oklch(0.8 0.35 70) !important;
+}
+
+.retro .hover\:bg-muted\/50:hover {
+  background-color: oklch(0.2 0.05 60) !important;
+}
+
+/* Settings dropdown */
+.retro [class*="shadow"] {
+  box-shadow: none !important;
+  border: 2px solid oklch(0.3 0.15 50) !important;
+}
+
+/* Ensure the split flap time element has proper styling */
+.retro .split-flap-time {
+  font-family: var(--font-geist-mono, monospace);
+  color: oklch(0.65 0.25 70);
+  font-weight: bold;
+}
+
+/* Remove gradient backgrounds */
+.retro [class*="bg-gradient"] {
+  background-image: none !important;
+  background-color: oklch(0.15 0.02 50) !important;
+}
+
+/* Override any semi-transparent backgrounds */
+.retro .bg-background\/95,
+.retro .bg-background\/90,
+.retro .bg-background\/80 {
+  background-color: oklch(0.08 0 0) !important;
+}

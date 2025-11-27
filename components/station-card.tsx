@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { formatArrivalTime, formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
+import { SplitFlapTime } from '@/components/split-flap-time';
 
 interface StationCardProps {
   stationId: string;
@@ -228,15 +229,17 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <Badge
-                      className="text-lg px-3 py-1"
-                      style={{
-                        backgroundColor: `#${routeColor}`,
-                        color: badgeColor,
-                      }}
-                    >
-                      {arrival.routeId}
-                    </Badge>
+                    <SplitFlapTime value={arrival.routeId}>
+                      <Badge
+                        className="text-lg px-3 py-1"
+                        style={{
+                          backgroundColor: `#${routeColor}`,
+                          color: badgeColor,
+                        }}
+                      >
+                        {arrival.routeId}
+                      </Badge>
+                    </SplitFlapTime>
                     <div>
                       <div className="font-semibold">{arrival.destination}</div>
                       {arrival.trainId && (
@@ -247,9 +250,11 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold">
-                      {formatArrivalTime(arrival.arrivalTimeSeconds)}
-                    </div>
+                    <SplitFlapTime value={arrival.arrivalTimeSeconds}>
+                      <div className="text-2xl font-bold">
+                        {formatArrivalTime(arrival.arrivalTimeSeconds)}
+                      </div>
+                    </SplitFlapTime>
                     <div className="text-sm text-muted-foreground">
                       {formatTime(arrival.arrivalTime)}
                     </div>
