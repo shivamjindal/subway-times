@@ -82,6 +82,7 @@ export function SubwayTimesDisplay() {
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
   const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
+  const [pendingStations, setPendingStations] = useState<Set<string>>(new Set());
   const hasDataRef = useRef(false);
   const dataRef = useRef<SubwayTimesData | null>(null);
 
@@ -218,6 +219,14 @@ export function SubwayTimesDisplay() {
       setData(result);
       dataRef.current = result;
       hasDataRef.current = true;
+      
+      // Remove stations that now have data from pending set
+      const stationsWithData = new Set<string>(result.arrivals.map((a: TrainArrival) => a.stationId));
+      setPendingStations(prev => {
+        const updated = new Set(prev);
+        stationsWithData.forEach((id) => updated.delete(id));
+        return updated;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       hasDataRef.current = false;
@@ -315,11 +324,34 @@ export function SubwayTimesDisplay() {
 
   const handleStationsChange = (stationIds: string[]) => {
     // Add new stations with default direction 'all'
+    const currentStationIds = stationConfigs.map(c => c.stationId);
+    const newStationIds = stationIds.filter(id => !currentStationIds.includes(id));
+    
     const newConfigs: StationConfig[] = stationIds.map(id => {
       const existing = stationConfigs.find(c => c.stationId === id);
       return existing || { stationId: id, direction: 'all', selectedRoutes: [] };
     });
     setStationConfigs(newConfigs);
+    
+    // Mark newly added stations as pending (waiting for API data)
+    if (newStationIds.length > 0) {
+      setPendingStations(prev => {
+        const updated = new Set(prev);
+        newStationIds.forEach(id => updated.add(id));
+        return updated;
+      });
+    }
+    
+    // Remove stations that were removed from pending (only keep stations that are still selected)
+    setPendingStations(prev => {
+      const updated = new Set<string>();
+      prev.forEach(id => {
+        if (stationIds.includes(id)) {
+          updated.add(id);
+        }
+      });
+      return updated;
+    });
     
     // Clear any filtered stations that were removed
     setFilteredStationIds(prev => prev.filter(id => stationIds.includes(id)));
@@ -633,6 +665,7 @@ export function SubwayTimesDisplay() {
                   {visibleConfigs.map((config) => {
                     const arrivals = arrivalsByStation[config.stationId] || [];
                     const alerts = alertsByStation[config.stationId] || [];
+                    const isPending = pendingStations.has(config.stationId);
                     
                     return (
                       <SortableStationCard
@@ -640,6 +673,7 @@ export function SubwayTimesDisplay() {
                         config={config}
                         arrivals={arrivals}
                         alerts={alerts}
+                        isPending={isPending}
                         onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
                         onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
                         showDragHandle={stationConfigs.length > 1}
@@ -668,12 +702,13 @@ interface SortableStationCardProps {
   config: StationConfig;
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
+  isPending: boolean;
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   onRouteToggle: (routeId: string) => void;
   showDragHandle: boolean;
 }
 
-function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
+function SortableStationCard({ config, arrivals, alerts, isPending, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -704,6 +739,7 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRo
           arrivals={arrivals}
           alerts={alerts}
           direction={config.direction}
+          isPending={isPending}
           onDirectionChange={onDirectionChange}
           selectedRoutes={config.selectedRoutes}
           onRouteToggle={onRouteToggle}

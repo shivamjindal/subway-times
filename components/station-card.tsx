@@ -8,12 +8,14 @@ import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-reac
 import { formatArrivalTime, formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 import { SplitFlapTime } from '@/components/split-flap-time';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface StationCardProps {
   stationId: string;
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
   direction: 'all' | 'N' | 'S';
+  isPending?: boolean;
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   selectedRoutes?: string[];
   onRouteToggle: (routeId: string) => void;
@@ -21,7 +23,7 @@ interface StationCardProps {
 
 const INITIAL_TRAINS_TO_SHOW = 5;
 
-export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
+export function StationCard({ stationId, arrivals, alerts, direction, isPending = false, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -213,9 +215,17 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
 
         {/* Train Arrivals */}
         {filteredArrivals.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No trains scheduled at this time
-          </div>
+          isPending ? (
+            <div className="space-y-2">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No trains scheduled at this time
+            </div>
+          )
         ) : (
           <div className="space-y-2">
             {displayedArrivals.map((arrival, index) => {
