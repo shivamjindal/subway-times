@@ -220,11 +220,16 @@ export function SubwayTimesDisplay() {
       dataRef.current = result;
       hasDataRef.current = true;
       
-      // Remove stations that now have data from pending set
-      const stationsWithData = new Set<string>(result.arrivals.map((a: TrainArrival) => a.stationId));
+      // Remove stations from pending set after successful API response
+      // Only remove stations that appear in the response (even with 0 arrivals)
+      // If a station was requested but doesn't appear in response, keep it pending
+      // (this handles cases where API hasn't processed the station yet)
+      const stationsInResponse = new Set<string>(result.arrivals.map((a: TrainArrival) => a.stationId));
       setPendingStations(prev => {
         const updated = new Set(prev);
-        stationsWithData.forEach((id) => updated.delete(id));
+        // Only remove stations that appear in the API response
+        // This means the API successfully processed them (even if they have 0 arrivals)
+        stationsInResponse.forEach((id) => updated.delete(id));
         return updated;
       });
     } catch (err) {
