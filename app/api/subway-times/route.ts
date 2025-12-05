@@ -239,12 +239,18 @@ export async function GET(request: Request) {
       return `${header}|${description}`;
     };
 
-    for (const { feedMessage } of validFeeds) {
+    for (const { feedKey, feedMessage } of validFeeds) {
       const { arrivals, alerts } = parseGTFSFeed(
         feedMessage,
         allTargetStopIds,
         Array.from(stationRoutes)
       );
+
+      const arrivalsByRouteForFeed = arrivals.reduce((acc: Record<string, number>, arrival) => {
+        acc[arrival.routeId] = (acc[arrival.routeId] || 0) + 1;
+        return acc;
+      }, {});
+
       allArrivals.push(...arrivals);
 
       // Deduplicate alerts by ID and content
@@ -284,6 +290,11 @@ export async function GET(request: Request) {
     // Sort arrivals by arrival time
     allArrivals.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
+    const arrivalsByRouteLog = allArrivals.reduce((acc: Record<string, number>, arrival) => {
+      acc[arrival.routeId] = (acc[arrival.routeId] || 0) + 1;
+      return acc;
+    }, {});
+
     // Filter alerts to only active ones
     const now = Math.floor(Date.now() / 1000);
     const activeAlerts = allAlerts.filter((alert) => {
@@ -292,6 +303,11 @@ export async function GET(request: Request) {
         return isActive;
       });
     });
+
+    const arrivalsByStationLog = allArrivals.reduce((acc: Record<string, number>, arrival) => {
+      acc[arrival.stationId] = (acc[arrival.stationId] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
     return NextResponse.json({
       arrivals: allArrivals,

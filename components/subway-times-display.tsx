@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation } from '@/lib/subway-data';
-import { AlertCircle, Cloud, CloudRain, Sun, Wind } from 'lucide-react';
+import { AlertCircle, Cloud, CloudRain, RefreshCcw, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
 import {
@@ -71,7 +71,12 @@ interface WeatherData {
 const STORAGE_KEY = 'selectedStations';
 const WEATHER_CARD_VISIBLE_KEY = 'weatherCardVisible';
 
-export function SubwayTimesDisplay() {
+export interface SubwayTimesDisplayRef {
+  refresh: () => void;
+  isRefreshing: () => boolean;
+}
+
+export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref) => {
   const [stationConfigs, setStationConfigs] = useState<StationConfig[]>([]);
   const [data, setData] = useState<SubwayTimesData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +90,20 @@ export function SubwayTimesDisplay() {
   const [pendingStations, setPendingStations] = useState<Set<string>>(new Set());
   const hasDataRef = useRef(false);
   const dataRef = useRef<SubwayTimesData | null>(null);
+  const stationConfigsRef = useRef<StationConfig[]>([]);
+  const quickRetryTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    stationConfigsRef.current = stationConfigs;
+  }, [stationConfigs]);
+
+  useEffect(() => {
+    return () => {
+      if (quickRetryTimeoutRef.current !== null) {
+        clearTimeout(quickRetryTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Load stations from localStorage on mount
   useEffect(() => {
@@ -174,10 +193,10 @@ export function SubwayTimesDisplay() {
     selectedStationIdsRef.current = selectedStationIds;
   }, [selectedStationIds]);
 
-  const fetchData = useCallback(async (showRefreshing = false) => {
+  const fetchData = useCallback(async (showRefreshing = false, allowQuickRetry = true) => {
     // Use ref to get current station IDs without making fetchData depend on order changes
     const currentStationIds = selectedStationIdsRef.current;
-    
+
     if (currentStationIds.length === 0) {
       const emptyData = { arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) };
       setData(emptyData);
@@ -232,6 +251,32 @@ export function SubwayTimesDisplay() {
         stationsInResponse.forEach((id) => updated.delete(id));
         return updated;
       });
+
+      if (allowQuickRetry) {
+        const arrivals = result.arrivals || [];
+        const arrivalsByStation = new Map<string, Set<string>>();
+        arrivals.forEach((a: TrainArrival) => {
+          if (!arrivalsByStation.has(a.stationId)) {
+            arrivalsByStation.set(a.stationId, new Set());
+          }
+          arrivalsByStation.get(a.stationId)!.add(a.routeId);
+        });
+
+        const shouldQuickRetry = stationConfigsRef.current.some(config => {
+          const expectedRoutes = getRoutesForStation(config.stationId).map(r => r.routeId);
+          if (expectedRoutes.length === 0) return false;
+          const arrivalRoutes = arrivalsByStation.get(config.stationId) || new Set<string>();
+          if (arrivalRoutes.size === 0) return true;
+          return arrivalRoutes.size < expectedRoutes.length;
+        });
+
+        if (shouldQuickRetry && quickRetryTimeoutRef.current === null) {
+          quickRetryTimeoutRef.current = window.setTimeout(() => {
+            quickRetryTimeoutRef.current = null;
+            fetchData(true, false);
+          }, 5000);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       hasDataRef.current = false;
@@ -241,6 +286,12 @@ export function SubwayTimesDisplay() {
       setRefreshing(false);
     }
   }, []); // Uses ref to access current station IDs, no dependencies needed
+
+  // Expose refresh function via ref
+  useImperativeHandle(ref, () => ({
+    refresh: () => fetchData(true),
+    isRefreshing: () => refreshing,
+  }), [fetchData, refreshing]);
 
   useEffect(() => {
     fetchData();
@@ -548,7 +599,9 @@ export function SubwayTimesDisplay() {
     <div className="container mx-auto p-4 max-w-6xl">
       {/* Station Selector */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-4">Subway Times</h1>
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold">Subway Times</h1>
+        </div>
         <StationSelector
           selectedStations={selectedStationIds}
           onStationsChange={handleStationsChange}
@@ -701,7 +754,9 @@ export function SubwayTimesDisplay() {
       )}
     </div>
   );
-}
+});
+
+SubwayTimesDisplay.displayName = 'SubwayTimesDisplay';
 
 interface SortableStationCardProps {
   config: StationConfig;
