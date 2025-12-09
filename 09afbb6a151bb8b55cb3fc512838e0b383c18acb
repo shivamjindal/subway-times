@@ -1,4 +1,8 @@
 AI Notes:
 
 app/api/subway-times/route.ts: +170,+172,+184,+186-187,+201,+203-204,+215-216,+218,+224,+226 -200
-components/subway-times-display.tsx: +90,+130,+132,+134,+136,+140,+142,+145,+147,+176,+178,+185,+187,+207,+209,+295,+297,+303,+305 -94,-183
+components/subway-times-display.tsx: +90-92[0],+130,+132,+134,+136,+140,+142,+145,+147,+176,+178,+185,+187,+207,+209,+295,+297,+303,+305 -94[0],-183[0]
+
+Conversations:
+
+[0]: 4c8698f1-3e97-4c7b-b5f1-29c06e09e731; MTA alerts: IDs, functionality, and hiding; claude-4.5-opus-high-thinking;
