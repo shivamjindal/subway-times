@@ -1,3 +1,8 @@
 AI Notes:
 
-components/subway-times-display.tsx: +229,+342-343,+351-352,+354
+components/station-card.tsx: +224[0],+228[0]
+components/subway-times-display.tsx: +226[0],+228-229[0],+339[0],+341-343[0],+351-354[0]
+
+Conversations:
+
+[0]: 4c8698f1-3e97-4c7b-b5f1-29c06e09e731; MTA alerts: IDs, functionality, and hiding; claude-4.5-opus-high-thinking;
