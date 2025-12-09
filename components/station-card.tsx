@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, X, Eye } from 'lucide-react';
 import { formatArrivalTime, formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 import { SplitFlapTime } from '@/components/split-flap-time';
@@ -14,16 +14,26 @@ interface StationCardProps {
   stationId: string;
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
+  hiddenAlertKeys: Set<string>;
+  showHiddenAlerts: boolean;
   direction: 'all' | 'N' | 'S';
   isPending?: boolean;
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   selectedRoutes?: string[];
   onRouteToggle: (routeId: string) => void;
+  onHideAlert: (alert: ServiceAlert) => void;
+  onUnhideAlert: (alert: ServiceAlert) => void;
 }
+
+// Helper to generate a content-based key for alert deduplication/hiding
+const getAlertContentKey = (alert: ServiceAlert): string => {
+  const normalize = (text: string) => (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `${normalize(alert.headerText)}|${normalize(alert.descriptionText)}`;
+};
 
 const INITIAL_TRAINS_TO_SHOW = 5;
 
-export function StationCard({ stationId, arrivals, alerts, direction, isPending = false, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
+export function StationCard({ stationId, arrivals, alerts, hiddenAlertKeys, showHiddenAlerts, direction, isPending = false, onDirectionChange, selectedRoutes, onRouteToggle, onHideAlert, onUnhideAlert }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -201,15 +211,46 @@ export function StationCard({ stationId, arrivals, alerts, direction, isPending 
         {/* Service Alerts */}
         {stationAlerts.length > 0 && (
           <div className="space-y-2">
-            {stationAlerts.map((alert) => (
-              <Alert key={alert.id} variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>{alert.headerText}</AlertTitle>
-                {alert.descriptionText && (
-                  <AlertDescription>{alert.descriptionText}</AlertDescription>
-                )}
-              </Alert>
-            ))}
+            {stationAlerts.map((alert) => {
+              const contentKey = getAlertContentKey(alert);
+              const isHidden = hiddenAlertKeys.has(contentKey);
+              
+              return (
+                <Alert 
+                  key={alert.id} 
+                  variant="destructive"
+                  className={`relative ${isHidden && showHiddenAlerts ? 'opacity-60 border-dashed' : ''}`}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle className="pr-8 flex items-center gap-2">
+                    {alert.headerText}
+                    {isHidden && showHiddenAlerts && (
+                      <span className="text-xs font-normal bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                        Hidden
+                      </span>
+                    )}
+                  </AlertTitle>
+                  {alert.descriptionText && (
+                    <AlertDescription className="pr-8">{alert.descriptionText}</AlertDescription>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => isHidden ? onUnhideAlert(alert) : onHideAlert(alert)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="absolute top-3 right-3 p-1 hover:bg-destructive/20 rounded transition-colors"
+                    aria-label={isHidden ? 'Show this alert' : 'Hide this alert'}
+                    title={isHidden ? 'Show this alert' : 'Hide this alert'}
+                  >
+                    {isHidden ? (
+                      <Eye className="h-4 w-4" />
+                    ) : (
+                      <X className="h-4 w-4" />
+                    )}
+                  </button>
+                </Alert>
+              );
+            })}
           </div>
         )}
 

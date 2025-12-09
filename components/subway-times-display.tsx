@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation } from '@/lib/subway-data';
-import { AlertCircle, Cloud, CloudRain, RefreshCcw, Sun, Wind } from 'lucide-react';
+import { AlertCircle, Cloud, CloudRain, Eye, EyeOff, RefreshCcw, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
 import {
@@ -70,6 +70,13 @@ interface WeatherData {
 
 const STORAGE_KEY = 'selectedStations';
 const WEATHER_CARD_VISIBLE_KEY = 'weatherCardVisible';
+const HIDDEN_ALERTS_KEY = 'hiddenAlerts';
+
+// Helper to generate a content-based key for alert deduplication/hiding
+const getAlertContentKey = (alert: ServiceAlert): string => {
+  const normalize = (text: string) => (text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `${normalize(alert.headerText)}|${normalize(alert.descriptionText)}`;
+};
 
 export interface SubwayTimesDisplayRef {
   refresh: () => void;
@@ -88,6 +95,8 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
   const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
   const [pendingStations, setPendingStations] = useState<Set<string>>(new Set());
+  const [hiddenAlertKeys, setHiddenAlertKeys] = useState<Set<string>>(new Set());
+  const [showHiddenAlerts, setShowHiddenAlerts] = useState(false);
   const hasDataRef = useRef(false);
   const dataRef = useRef<SubwayTimesData | null>(null);
   const stationConfigsRef = useRef<StationConfig[]>([]);
@@ -136,6 +145,34 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       console.error('Error loading weather card visibility setting:', err);
     }
   }, []);
+
+  // Load hidden alerts from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(HIDDEN_ALERTS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setHiddenAlertKeys(new Set(parsed));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading hidden alerts from localStorage:', err);
+    }
+  }, []);
+
+  // Save hidden alerts to localStorage whenever they change
+  useEffect(() => {
+    try {
+      if (hiddenAlertKeys.size > 0) {
+        localStorage.setItem(HIDDEN_ALERTS_KEY, JSON.stringify(Array.from(hiddenAlertKeys)));
+      } else {
+        localStorage.removeItem(HIDDEN_ALERTS_KEY);
+      }
+    } catch (err) {
+      console.error('Error saving hidden alerts to localStorage:', err);
+    }
+  }, [hiddenAlertKeys]);
 
   // Listen for storage changes to sync weather card visibility across tabs
   useEffect(() => {
@@ -466,6 +503,28 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     );
   };
 
+  const handleHideAlert = (alert: ServiceAlert) => {
+    const contentKey = getAlertContentKey(alert);
+    setHiddenAlertKeys(prev => {
+      const updated = new Set(prev);
+      updated.add(contentKey);
+      return updated;
+    });
+  };
+
+  const handleUnhideAlert = (alert: ServiceAlert) => {
+    const contentKey = getAlertContentKey(alert);
+    setHiddenAlertKeys(prev => {
+      const updated = new Set(prev);
+      updated.delete(contentKey);
+      return updated;
+    });
+  };
+
+  const toggleShowHiddenAlerts = () => {
+    setShowHiddenAlerts(prev => !prev);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
@@ -512,10 +571,12 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   }, [data]);
 
   // Group alerts by station, filtering by routes at each station
+  // Returns both visible alerts and hidden alerts (when showHiddenAlerts is true)
   const alertsByStation = useMemo(() => {
-    if (!data) return {};
+    if (!data) return { visible: {} as Record<string, ServiceAlert[]>, hidden: {} as Record<string, ServiceAlert[]> };
 
-    const grouped: Record<string, ServiceAlert[]> = {};
+    const visible: Record<string, ServiceAlert[]> = {};
+    const hidden: Record<string, ServiceAlert[]> = {};
 
     stationConfigs.forEach(config => {
       const stationId = config.stationId;
@@ -539,19 +600,9 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
       // Deduplicate alerts by content (header + description) to prevent showing the same alert twice
       // This handles cases where MTA assigns different IDs to the same alert content
-      // We deduplicate by text only - if the text is identical, it's the same alert
-      const normalizeText = (text: string): string => {
-        return (text || '')
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, ' '); // Collapse multiple whitespace into single space
-      };
       const seenContent = new Set<string>();
-      const stationAlerts = filteredAlerts.filter(alert => {
-        // Create a content-based key for deduplication (matching API logic)
-        const header = normalizeText(alert.headerText);
-        const description = normalizeText(alert.descriptionText);
-        const contentKey = `${header}|${description}`;
+      const deduplicatedAlerts = filteredAlerts.filter(alert => {
+        const contentKey = getAlertContentKey(alert);
         
         if (seenContent.has(contentKey)) {
           return false; // Already seen this content
@@ -561,11 +612,37 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
         return true;
       });
 
-      grouped[stationId] = stationAlerts;
+      // Separate visible and hidden alerts
+      const visibleAlerts: ServiceAlert[] = [];
+      const hiddenAlerts: ServiceAlert[] = [];
+
+      deduplicatedAlerts.forEach(alert => {
+        const contentKey = getAlertContentKey(alert);
+        if (hiddenAlertKeys.has(contentKey)) {
+          hiddenAlerts.push(alert);
+        } else {
+          visibleAlerts.push(alert);
+        }
+      });
+
+      visible[stationId] = visibleAlerts;
+      hidden[stationId] = hiddenAlerts;
     });
 
-    return grouped;
-  }, [data, stationConfigs]);
+    return { visible, hidden };
+  }, [data, stationConfigs, hiddenAlertKeys]);
+
+  // Calculate total hidden alerts count across all stations
+  const totalHiddenAlertsCount = useMemo(() => {
+    // Count unique hidden alerts (avoid double counting same alert across stations)
+    const uniqueHiddenKeys = new Set<string>();
+    Object.values(alertsByStation.hidden).forEach(alerts => {
+      alerts.forEach(alert => {
+        uniqueHiddenKeys.add(getAlertContentKey(alert));
+      });
+    });
+    return uniqueHiddenKeys.size;
+  }, [alertsByStation.hidden]);
 
   if (loading) {
     return (
@@ -694,6 +771,32 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
         </>
       )}
 
+      {/* Hidden Alerts Banner */}
+      {totalHiddenAlertsCount > 0 && (
+        <div className="mb-4 flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+          <span className="text-sm text-muted-foreground">
+            {totalHiddenAlertsCount} alert{totalHiddenAlertsCount !== 1 ? 's' : ''} hidden
+          </span>
+          <button
+            type="button"
+            onClick={toggleShowHiddenAlerts}
+            className="flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            {showHiddenAlerts ? (
+              <>
+                <EyeOff className="h-4 w-4" />
+                Hide dismissed
+              </>
+            ) : (
+              <>
+                <Eye className="h-4 w-4" />
+                Show all
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Station Cards */}
       {selectedStationIds.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
@@ -722,7 +825,12 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
                 <div className="space-y-4">
                   {visibleConfigs.map((config) => {
                     const arrivals = arrivalsByStation[config.stationId] || [];
-                    const alerts = alertsByStation[config.stationId] || [];
+                    const visibleAlerts = alertsByStation.visible[config.stationId] || [];
+                    const hiddenAlerts = alertsByStation.hidden[config.stationId] || [];
+                    // Show hidden alerts when toggle is on
+                    const alerts = showHiddenAlerts 
+                      ? [...visibleAlerts, ...hiddenAlerts]
+                      : visibleAlerts;
                     const isPending = pendingStations.has(config.stationId);
                     
                     return (
@@ -731,9 +839,13 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
                         config={config}
                         arrivals={arrivals}
                         alerts={alerts}
+                        hiddenAlertKeys={hiddenAlertKeys}
+                        showHiddenAlerts={showHiddenAlerts}
                         isPending={isPending}
                         onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
                         onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                        onHideAlert={handleHideAlert}
+                        onUnhideAlert={handleUnhideAlert}
                         showDragHandle={stationConfigs.length > 1}
                       />
                     );
@@ -762,13 +874,17 @@ interface SortableStationCardProps {
   config: StationConfig;
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
+  hiddenAlertKeys: Set<string>;
+  showHiddenAlerts: boolean;
   isPending: boolean;
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   onRouteToggle: (routeId: string) => void;
+  onHideAlert: (alert: ServiceAlert) => void;
+  onUnhideAlert: (alert: ServiceAlert) => void;
   showDragHandle: boolean;
 }
 
-function SortableStationCard({ config, arrivals, alerts, isPending, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
+function SortableStationCard({ config, arrivals, alerts, hiddenAlertKeys, showHiddenAlerts, isPending, onDirectionChange, onRouteToggle, onHideAlert, onUnhideAlert, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -798,11 +914,15 @@ function SortableStationCard({ config, arrivals, alerts, isPending, onDirectionC
           stationId={config.stationId}
           arrivals={arrivals}
           alerts={alerts}
+          hiddenAlertKeys={hiddenAlertKeys}
+          showHiddenAlerts={showHiddenAlerts}
           direction={config.direction}
           isPending={isPending}
           onDirectionChange={onDirectionChange}
           selectedRoutes={config.selectedRoutes}
           onRouteToggle={onRouteToggle}
+          onHideAlert={onHideAlert}
+          onUnhideAlert={onUnhideAlert}
         />
       </div>
     </div>
