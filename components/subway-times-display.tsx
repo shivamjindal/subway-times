@@ -76,7 +76,11 @@ export interface SubwayTimesDisplayRef {
   isRefreshing: () => boolean;
 }
 
-export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref) => {
+export interface SubwayTimesDisplayProps {
+  initialFilteredStation?: string | null;
+}
+
+export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef, SubwayTimesDisplayProps>(({ initialFilteredStation }, ref) => {
   const [stationConfigs, setStationConfigs] = useState<StationConfig[]>([]);
   const [data, setData] = useState<SubwayTimesData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +90,9 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
-  const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
+  const [filteredStationIds, setFilteredStationIds] = useState<string[]>(
+    initialFilteredStation ? [initialFilteredStation] : []
+  );
   const [pendingStations, setPendingStations] = useState<Set<string>>(new Set());
   const hasDataRef = useRef(false);
   const dataRef = useRef<SubwayTimesData | null>(null);
