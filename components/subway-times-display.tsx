@@ -14,7 +14,7 @@ import {
   getActiveScheduleRule,
   loadStationSchedule,
 } from '@/lib/station-schedule';
-import { AlertCircle, Cloud, CloudRain, RefreshCcw, Sun, Wind } from 'lucide-react';
+import { AlertCircle, Cloud, CloudRain, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
 import {
@@ -197,7 +197,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     if (activeScheduleRule) {
       setFilteredStationIds([]);
     }
-  }, [activeScheduleRule?.id]);
+  }, [activeScheduleRule]);
 
   // Load weather card visibility setting from localStorage on mount
   useEffect(() => {
