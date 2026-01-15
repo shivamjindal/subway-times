@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { StationSelector } from '@/components/station-selector';
@@ -52,6 +52,7 @@ const createNewRule = (): StationScheduleRule => ({
 });
 
 const loadStationConfigs = (): StationConfig[] => {
+  if (typeof window === 'undefined') return [];
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return [];
@@ -65,27 +66,22 @@ const loadStationConfigs = (): StationConfig[] => {
 };
 
 export default function StationSchedulePage() {
-  const [scheduleState, setScheduleState] = useState<StationScheduleState>({
-    enabled: false,
-    rules: [],
-  });
-  const [defaultStationConfigs, setDefaultStationConfigs] = useState<StationConfig[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [scheduleState, setScheduleState] = useState<StationScheduleState>(() => loadStationSchedule());
+  const [defaultStationConfigs, setDefaultStationConfigs] = useState<StationConfig[]>(() =>
+    loadStationConfigs()
+  );
   const [now, setNow] = useState(() => new Date());
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
-    setScheduleState(loadStationSchedule());
-    setDefaultStationConfigs(loadStationConfigs());
-    setHasLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoaded) return;
     saveStationSchedule(scheduleState);
-  }, [hasLoaded, scheduleState]);
+  }, [scheduleState]);
 
   useEffect(() => {
-    if (!hasLoaded) return;
     try {
       if (defaultStationConfigs.length > 0) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultStationConfigs));
@@ -95,7 +91,7 @@ export default function StationSchedulePage() {
     } catch (err) {
       console.error('Error saving default stations:', err);
     }
-  }, [defaultStationConfigs, hasLoaded]);
+  }, [defaultStationConfigs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -188,6 +184,16 @@ export default function StationSchedulePage() {
     if (!activeRule) return [];
     return activeRule.stationIds.map((id) => getStation(id)?.name || id);
   }, [activeRule]);
+
+  if (!isMounted) {
+    return (
+      <main className="min-h-screen bg-background py-8">
+        <div className="container mx-auto p-4 max-w-4xl text-sm text-muted-foreground">
+          Loading schedule...
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background py-8">
