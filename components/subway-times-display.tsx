@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
-import { getRoutesForStation } from '@/lib/subway-data';
-import { AlertCircle, Cloud, CloudRain, RefreshCcw, Sun, Wind } from 'lucide-react';
+import { getRoutesForStation, getStation } from '@/lib/subway-data';
+import {
+  type StationScheduleState,
+  STATION_SCHEDULE_STORAGE_KEY,
+  STATION_SCHEDULE_EVENT,
+  getActiveScheduleRule,
+  loadStationSchedule,
+} from '@/lib/station-schedule';
+import { AlertCircle, Cloud, CloudRain, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
 import {
@@ -78,6 +86,11 @@ export interface SubwayTimesDisplayRef {
 
 export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref) => {
   const [stationConfigs, setStationConfigs] = useState<StationConfig[]>([]);
+  const [scheduleState, setScheduleState] = useState<StationScheduleState>({
+    enabled: false,
+    rules: [],
+  });
+  const [now, setNow] = useState(() => new Date());
   const [data, setData] = useState<SubwayTimesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,9 +106,31 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const stationConfigsRef = useRef<StationConfig[]>([]);
   const quickRetryTimeoutRef = useRef<number | null>(null);
 
+  const activeScheduleRule = useMemo(
+    () => getActiveScheduleRule(scheduleState, now),
+    [scheduleState, now]
+  );
+  const scheduleActive = Boolean(activeScheduleRule);
+
+  const effectiveStationConfigs = useMemo(() => {
+    if (!activeScheduleRule) return stationConfigs;
+    const baseConfigMap = new Map(
+      stationConfigs.map((config) => [config.stationId, config])
+    );
+    return activeScheduleRule.stationIds.map((stationId) => {
+      return (
+        baseConfigMap.get(stationId) || {
+          stationId,
+          direction: 'all',
+          selectedRoutes: [],
+        }
+      );
+    });
+  }, [activeScheduleRule, stationConfigs]);
+
   useEffect(() => {
-    stationConfigsRef.current = stationConfigs;
-  }, [stationConfigs]);
+    stationConfigsRef.current = effectiveStationConfigs;
+  }, [effectiveStationConfigs]);
 
   useEffect(() => {
     return () => {
@@ -124,6 +159,45 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
+
+  // Load schedule rules from localStorage on mount
+  useEffect(() => {
+    setScheduleState(loadStationSchedule());
+  }, []);
+
+  // Listen for schedule changes across tabs and same-tab updates
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STATION_SCHEDULE_STORAGE_KEY) {
+        setScheduleState(loadStationSchedule());
+      }
+    };
+
+    const handleCustomChange = () => {
+      setScheduleState(loadStationSchedule());
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener(STATION_SCHEDULE_EVENT, handleCustomChange as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener(STATION_SCHEDULE_EVENT, handleCustomChange as EventListener);
+    };
+  }, []);
+
+  // Keep schedule evaluation current
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (activeScheduleRule) {
+      setFilteredStationIds([]);
+    }
+  }, [activeScheduleRule]);
 
   // Load weather card visibility setting from localStorage on mount
   useEffect(() => {
@@ -178,9 +252,13 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     }
   }, [stationConfigs]);
 
-  const selectedStationIds = useMemo(() => {
+  const baseStationIds = useMemo(() => {
     return stationConfigs.map(c => c.stationId);
   }, [stationConfigs]);
+
+  const selectedStationIds = useMemo(() => {
+    return effectiveStationConfigs.map(c => c.stationId);
+  }, [effectiveStationConfigs]);
 
   // Normalized station IDs string for dependency comparison (sorted to avoid re-fetch on reorder)
   const selectedStationIdsKey = useMemo(() => {
@@ -378,6 +456,27 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     return `${value}°F`;
   };
 
+  const formatScheduleDays = (days: number[]) => {
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const sorted = [...days].sort((a, b) => a - b);
+    const isEveryDay = sorted.length === 7 && sorted.every((day, index) => day === index);
+    if (isEveryDay) return 'Every day';
+    const weekdays = [1, 2, 3, 4, 5];
+    const isWeekdays =
+      sorted.length === 5 && weekdays.every((day) => sorted.includes(day));
+    if (isWeekdays) return 'Weekdays';
+    const isWeekend = sorted.length === 2 && sorted.includes(0) && sorted.includes(6);
+    if (isWeekend) return 'Weekends';
+    return sorted.map((day) => dayLabels[day] || '').filter(Boolean).join(', ');
+  };
+
+  const formatScheduleTimeRange = (start: string, end: string) => `${start} - ${end}`;
+
+  const activeScheduleStationNames = useMemo(() => {
+    if (!activeScheduleRule) return [];
+    return activeScheduleRule.stationIds.map((id) => getStation(id)?.name || id);
+  }, [activeScheduleRule]);
+
   const handleStationsChange = (stationIds: string[]) => {
     // Add new stations with default direction 'all'
     const currentStationIds = stationConfigs.map(c => c.stationId);
@@ -467,6 +566,9 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (scheduleActive) {
+      return;
+    }
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
@@ -517,7 +619,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
     const grouped: Record<string, ServiceAlert[]> = {};
 
-    stationConfigs.forEach(config => {
+    effectiveStationConfigs.forEach(config => {
       const stationId = config.stationId;
       const stationRoutes = getRoutesForStation(stationId).map(r => r.routeId);
 
@@ -565,7 +667,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     });
 
     return grouped;
-  }, [data, stationConfigs]);
+  }, [data, effectiveStationConfigs]);
 
   if (loading) {
     return (
@@ -601,12 +703,31 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       <div className="mb-6">
         <div className="mb-4">
           <h1 className="text-2xl font-bold">Subway Times</h1>
+          <p className="text-sm text-muted-foreground">
+            Default stations used when no schedule matches.{' '}
+            <Link href="/station-schedule" className="text-primary hover:underline">
+              Manage schedule
+            </Link>
+          </p>
         </div>
+        {scheduleActive && activeScheduleRule && (
+          <Alert className="mb-4">
+            <AlertTitle>Schedule active</AlertTitle>
+            <AlertDescription>
+              Showing {activeScheduleStationNames.join(', ')} ·{' '}
+              {formatScheduleDays(activeScheduleRule.days)} ·{' '}
+              {formatScheduleTimeRange(activeScheduleRule.startTime, activeScheduleRule.endTime)}.{' '}
+              <Link href="/station-schedule" className="text-primary hover:underline">
+                Edit schedule
+              </Link>
+            </AlertDescription>
+          </Alert>
+        )}
         <StationSelector
-          selectedStations={selectedStationIds}
+          selectedStations={baseStationIds}
           onStationsChange={handleStationsChange}
-          filteredStations={filteredStationIds}
-          onStationFilterToggle={handleStationFilterToggle}
+          filteredStations={scheduleActive ? [] : filteredStationIds}
+          onStationFilterToggle={scheduleActive ? undefined : handleStationFilterToggle}
         />
       </div>
 
@@ -710,8 +831,8 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
             // Compute visible stations to ensure SortableContext items match rendered children
             const hasFilteredStations = filteredStationIds.length > 0;
             const visibleConfigs = hasFilteredStations
-              ? stationConfigs.filter(c => filteredStationIds.includes(c.stationId))
-              : stationConfigs;
+              ? effectiveStationConfigs.filter(c => filteredStationIds.includes(c.stationId))
+              : effectiveStationConfigs;
             const visibleStationIds = visibleConfigs.map(c => c.stationId);
             
             return (
@@ -734,7 +855,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
                         isPending={isPending}
                         onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
                         onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
-                        showDragHandle={stationConfigs.length > 1}
+                        showDragHandle={!scheduleActive && effectiveStationConfigs.length > 1}
                       />
                     );
                   })}

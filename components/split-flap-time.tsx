@@ -16,6 +16,7 @@ export function SplitFlapTime({ value, children }: SplitFlapTimeProps) {
   useEffect(() => {
     // Only animate if retro mode is enabled and value has changed
     if (retroEnabled && value !== prevValueRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsAnimating(true);
       prevValueRef.current = value;
 
