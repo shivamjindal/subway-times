@@ -74,8 +74,11 @@ export default function StationSchedulePage() {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setScheduleState(loadStationSchedule());
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDefaultStationConfigs(loadStationConfigs());
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasLoaded(true);
   }, []);
 
