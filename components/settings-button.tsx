@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import Link from 'next/link';
 import { Settings, Sun, Moon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useTheme } from 'next-themes';
@@ -125,6 +126,15 @@ export function SettingsButton() {
                 checked={retroEnabled}
                 onCheckedChange={handleRetroToggle}
               />
+            </div>
+            <div className="pt-2 border-t">
+              <Link
+                href="/station-schedule"
+                onClick={() => setIsOpen(false)}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                Time-based stations
+              </Link>
             </div>
             {mounted && !retroEnabled && (
               <div className="flex items-center justify-between pt-2 border-t">
