@@ -583,18 +583,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     );
   }
 
-  if (error) {
-    return (
-      <div className="container mx-auto p-4 max-w-6xl">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto p-4 max-w-6xl">
       {/* Station Selector */}
@@ -609,6 +597,17 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
           onStationFilterToggle={handleStationFilterToggle}
         />
       </div>
+
+      {/* Error Alert - Show at top but keep rest of UI functional */}
+      {error && (
+        <div className="mb-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
+      )}
 
       {/* Weather Section */}
       {weatherCardVisible && (
