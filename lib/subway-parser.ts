@@ -73,6 +73,9 @@ export function parseGTFSFeed(
     return { arrivals, alerts };
   }
 
+  const targetStopIdSet = new Set(targetStopIds);
+  const routeFilterSet = routeFilter ? new Set(routeFilter) : null;
+
   for (const entity of feedMessage.entity) {
     if (entity.tripUpdate) {
       const tripUpdate = entity.tripUpdate;
@@ -80,7 +83,7 @@ export function parseGTFSFeed(
       const routeId = trip?.routeId;
       
       // Filter by route if specified
-      if (routeFilter && routeId && !routeFilter.includes(routeId)) {
+      if (routeFilterSet && routeId && !routeFilterSet.has(routeId)) {
         continue;
       }
 
@@ -91,14 +94,7 @@ export function parseGTFSFeed(
         for (const stopTimeUpdate of tripUpdate.stopTimeUpdate) {
           // Check if this stop matches any of our target stop IDs
           const stopId = stopTimeUpdate.stopId;
-          if (!stopId) continue;
-          
-          const matchesStop = targetStopIds.some(targetStopId => {
-            // Exact match
-            return stopId === targetStopId;
-          });
-
-          if (matchesStop && stopTimeUpdate.arrival) {
+          if (stopId && targetStopIdSet.has(stopId) && stopTimeUpdate.arrival) {
             const arrivalTimeValue = stopTimeUpdate.arrival.time;
             if (!arrivalTimeValue) continue;
 
@@ -138,8 +134,8 @@ export function parseGTFSFeed(
       const alert = entity.alert;
 
       // Collect alerts for any route (or filter if specified)
-      const isForRoute = !routeFilter || alert.informedEntity?.some(
-        (informedEntity) => informedEntity.routeId && routeFilter.includes(informedEntity.routeId)
+      const isForRoute = !routeFilterSet || alert.informedEntity?.some(
+        (informedEntity) => informedEntity.routeId && routeFilterSet.has(informedEntity.routeId)
       );
 
       if (isForRoute && alert.headerText && alert.headerText.translation) {
