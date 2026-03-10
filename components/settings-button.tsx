@@ -4,9 +4,16 @@ import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Settings, Sun, Moon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useTheme } from 'next-themes';
-import { useRetroUI, setRetroUIEnabled } from './use-retro-ui';
 
 const WEATHER_CARD_VISIBLE_KEY = 'weatherCardVisible';
+
+function useIsMounted() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
 
 function getWeatherVisibleSnapshot(): boolean {
   try {
@@ -41,20 +48,14 @@ function subscribeToWeatherVisible(callback: () => void): () => void {
 
 export function SettingsButton() {
   const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsMounted();
   const weatherVisible = useSyncExternalStore(
     subscribeToWeatherVisible,
     getWeatherVisibleSnapshot,
     () => true // server snapshot
   );
-  const retroEnabled = useRetroUI();
   const { resolvedTheme, setTheme } = useTheme();
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Ensure hydration safety
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -80,10 +81,6 @@ export function SettingsButton() {
     } catch (err) {
       console.error('Error saving weather visibility setting:', err);
     }
-  };
-
-  const handleRetroToggle = (checked: boolean) => {
-    setRetroUIEnabled(checked);
   };
 
   const handleThemeChange = () => {
@@ -116,17 +113,7 @@ export function SettingsButton() {
                 onCheckedChange={handleWeatherToggle}
               />
             </div>
-            <div className="flex items-center justify-between">
-              <label htmlFor="retro-toggle" className="text-sm font-medium cursor-pointer">
-                Enable Retro UI
-              </label>
-              <Switch
-                id="retro-toggle"
-                checked={retroEnabled}
-                onCheckedChange={handleRetroToggle}
-              />
-            </div>
-            {mounted && !retroEnabled && (
+            {mounted && (
               <div className="flex items-center justify-between pt-2 border-t">
                 <label htmlFor="theme-toggle" className="text-sm font-medium cursor-pointer">
                   Dark mode
