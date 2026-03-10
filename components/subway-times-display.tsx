@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -87,6 +87,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
   const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
+  const hasDataRef = useRef(false);
 
   // Load stations from localStorage on mount
   useEffect(() => {
@@ -179,11 +180,12 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       setError(null);
       setRefreshing(false);
       setLoading(false);
+      hasDataRef.current = false;
       return;
     }
 
     try {
-      const shouldShowRefreshing = showRefreshing || data !== null;
+      const shouldShowRefreshing = showRefreshing || hasDataRef.current;
       if (shouldShowRefreshing) {
         setRefreshing(true);
         setLoading(false);
@@ -206,13 +208,14 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       }
 
       setData(result);
+      hasDataRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [data, selectedStationIds]);
+  }, [selectedStationIds]);
 
   // Expose refresh function via ref
   useImperativeHandle(ref, () => ({
