@@ -11,208 +11,49 @@ globs:
   - "**/alert*"
 ---
 
-# MTA Subway Data Utility
+# MTA subway data reference
 
-This project includes comprehensive mappings of MTA NYC subway routes and stations, parsed from GTFS static data, plus real-time arrival and service alert parsing.
+Use this when changing route/station mappings, GTFS parsing, or subway alerts.
 
-## Key Files
+## Runtime data files
 
-### Static Data
-- `lib/subway-data.ts` - Main utility module with helper functions (use this!)
-- `lib/gtfs-mappings.ts` - Script to regenerate JSON mappings from GTFS data
-- `lib/route-to-stations.json` - Full route→stations mapping
-- `lib/station-to-routes.json` - Full station→routes mapping
-- `lib/simple-route-to-stations.json` - Simple route_id→[stop_ids] lookup
-- `lib/simple-station-to-routes.json` - Simple stop_id→[route_ids] lookup
-- `gtfs_subway/` - Raw GTFS static data files
+- `lib/station-to-routes.json` – station metadata and route lists (northbound/southbound included)
+- `lib/route-headsigns.json` – route terminal headsigns by direction
+- `gtfs_subway/*.txt` – raw GTFS static source files
 
-### Real-Time Data
-- `lib/subway-parser.ts` - GTFS-Realtime parser for arrivals and service alerts
-- `app/api/subway-times/route.ts` - API endpoint that fetches and parses MTA feeds
+## Runtime modules
 
-## Data Available
+- `lib/subway-data.ts`
+  - `getStation(stopId)`
+  - `getRoutesForStation(stopId)`
+  - `getNorthboundRoutesForStation(stopId)`
+  - `getSouthboundRoutesForStation(stopId)`
+  - `searchStationsByName(query)`
+  - `getRouteColor(routeId)`
+  - `getDirectionLabel(direction, arrivals)`
+- `lib/subway-parser.ts`
+  - parses GTFS-Realtime trip updates into arrivals
+  - parses GTFS-Realtime alerts into normalized alert objects
+- `app/api/subway-times/route.ts`
+  - fetches required MTA feed groups based on station routes
+  - fetches dedicated subway alerts feed
+  - returns deduplicated active alerts + sorted arrivals
 
-- **29 routes**: 1-7, A-G, J, L, M, N, Q, R, W, Z, GS/FS/H shuttles, SIR
-- **496 stations**: Parent stations with stopId, name, lat/lon
-- **Directional data**: Northbound and southbound routes/stations separately
+## Behavior notes
 
-## How to Use
+1. Real-time stop IDs include direction suffix (`N`/`S`), e.g. `F24N`; station IDs in mappings do not.
+2. Alerts with empty `affectedRoutes` are treated as system-wide.
+3. Alert dedupe is performed by both alert ID and normalized text content.
+4. Feed selection is route-based (`ROUTE_TO_FEED` in the API route).
 
-### Import the utility module
+## Regenerate mappings
 
-```typescript
-import {
-  // Route lookups
-  getAllRoutes,
-  getRoute,
-  getStationsForRoute,
-  getNorthboundStationsForRoute,
-  getSouthboundStationsForRoute,
-  
-  // Station lookups  
-  getAllStations,
-  getStation,
-  getRoutesForStation,
-  getNorthboundRoutesForStation,
-  getSouthboundRoutesForStation,
-  
-  // Search & discovery
-  searchStationsByName,
-  getStationsByName,
-  getAllRoutesAtStationComplex,
-  findNearbyStations,
-  
-  // Display helpers
-  getRouteColor,
-  getRouteDisplayName,
-  ROUTE_LINE_COLORS,
-  
-  // Raw data access
-  routeToStations,
-  stationToRoutes,
-} from '@/lib/subway-data';
-```
-
-### Common Patterns
-
-#### Get all stations for a train line
-```typescript
-const aTrainStations = getStationsForRoute('A');
-// Returns: Station[] with 66 stations
-```
-
-#### Get all routes at a station
-```typescript
-const routes = getRoutesForStation('127'); // Times Sq 1/2/3 platform
-// Returns: Route[] for that specific platform
-
-// To get ALL routes at a station complex (all platforms):
-const allRoutes = getAllRoutesAtStationComplex('Times Sq-42 St');
-// Returns: 1, 2, 3, 7, 7X, N, Q, R, S, W
-```
-
-#### Search stations by name
-```typescript
-const results = searchStationsByName('grand central');
-// Returns all stations matching (case-insensitive partial match)
-```
-
-#### Find nearby stations
-```typescript
-const nearby = findNearbyStations(40.7128, -74.0060, 0.5); // lat, lon, radiusKm
-// Returns stations within 0.5km
-```
-
-#### Get route color for styling
-```typescript
-const color = getRouteColor('A'); // Returns "0062CF" (blue)
-const displayName = getRouteDisplayName('GS'); // Returns "S"
-```
-
-## Types
-
-### Static Data Types
-
-```typescript
-interface Station {
-  stopId: string;    // e.g., "127", "A24"
-  name: string;      // e.g., "Times Sq-42 St"
-  lat: number;
-  lon: number;
-}
-
-interface Route {
-  routeId: string;   // e.g., "A", "1", "GS"
-  shortName: string; // e.g., "A", "1", "S"
-  longName: string;  // e.g., "8 Avenue Express"
-  color: string;     // Hex color without #, e.g., "0062CF"
-  textColor: string; // Text color for contrast
-}
-```
-
-### Real-Time Data Types
-
-```typescript
-interface TrainArrival {
-  tripId: string;
-  routeId: string;
-  stopId: string;           // With N/S suffix, e.g., "F24N"
-  stationId: string;        // Parent station ID without suffix
-  direction: 'N' | 'S';     // N = northbound, S = southbound
-  arrivalTime: number;      // Unix timestamp in seconds
-  arrivalTimeSeconds: number; // Seconds until arrival
-  destination: string;      // Headsign or destination
-  trainId?: string;
-}
-
-interface ServiceAlert {
-  id: string;
-  headerText: string;
-  descriptionText: string;
-  activePeriods: Array<{ start: number; end?: number }>;
-  affectedRoutes: string[];  // Route IDs this alert affects
-}
-```
-
-## MTA Real-Time Data
-
-### Feed URLs
-
-The MTA provides separate GTFS-Realtime feeds:
-
-**Train arrival feeds (by line group):**
-- ACE: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace`
-- BDFM: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm`
-- G: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g`
-- JZ: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-jz`
-- NQRW: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw`
-- L: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l`
-- 1234567: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs`
-- SI: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si`
-
-**Service alerts feed (all lines):**
-- Subway alerts: `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts`
-
-### Service Alert Filtering
-
-Service alerts include an `affectedRoutes` array that lists which train lines are affected. When displaying alerts:
-
-1. **Filter by station routes**: Only show alerts that affect routes serving that station
-2. **Respect user route selection**: If user selects specific routes, only show alerts for those routes
-3. **System-wide alerts**: Alerts with empty `affectedRoutes` should be shown to all stations
-
-Example filtering logic:
-```typescript
-// Filter alerts for a station with selected routes
-const stationRoutes = getRoutesForStation(stationId).map(r => r.routeId);
-const routesToMatch = selectedRoutes.length > 0 ? selectedRoutes : stationRoutes;
-
-const relevantAlerts = alerts.filter(alert => {
-  if (alert.affectedRoutes.length === 0) return true; // System-wide
-  return alert.affectedRoutes.some(routeId => routesToMatch.includes(routeId));
-});
-```
-
-## Important Notes
-
-1. **Station IDs are platform-specific**: The same station complex (e.g., Times Sq) has multiple stop_ids for different train lines. Use `getAllRoutesAtStationComplex(name)` to aggregate.
-
-2. **Direction suffixes**: In real-time feeds, stops have N/S suffix (e.g., "127N", "127S"). The mappings use parent station IDs without suffix.
-
-3. **Shuttle routes**: GS = 42 St Shuttle, FS = Franklin Ave Shuttle, H = Rockaway Shuttle. All display as "S".
-
-4. **Route colors**: Use `ROUTE_LINE_COLORS` constant or `getRouteColor()` for consistent MTA branding colors.
-
-5. **Service alerts are in a separate feed**: Don't expect alerts in the line-specific feeds. Always fetch from the dedicated subway-alerts feed.
-
-6. **Alert active periods**: Only show alerts where current time is within their `activePeriods` range.
-
-## Regenerating Mappings
-
-If GTFS data in `gtfs_subway/` is updated:
+When GTFS files under `gtfs_subway/` are updated:
 
 ```bash
 npx tsx lib/gtfs-mappings.ts
 ```
 
-This regenerates all JSON files in `lib/`.
+This regenerates:
+- `lib/station-to-routes.json`
+- `lib/route-headsigns.json`

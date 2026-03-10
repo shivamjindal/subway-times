@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useState, useMemo, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation } from '@/lib/subway-data';
-import { AlertCircle, Cloud, CloudRain, RefreshCcw, Sun, Wind } from 'lucide-react';
+import { AlertCircle, Cloud, CloudRain, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
 import {
@@ -87,23 +87,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
   const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
-  const [pendingStations, setPendingStations] = useState<Set<string>>(new Set());
-  const hasDataRef = useRef(false);
-  const dataRef = useRef<SubwayTimesData | null>(null);
-  const stationConfigsRef = useRef<StationConfig[]>([]);
-  const quickRetryTimeoutRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    stationConfigsRef.current = stationConfigs;
-  }, [stationConfigs]);
-
-  useEffect(() => {
-    return () => {
-      if (quickRetryTimeoutRef.current !== null) {
-        clearTimeout(quickRetryTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Load stations from localStorage on mount
   useEffect(() => {
@@ -187,35 +170,22 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     return [...selectedStationIds].sort().join(',');
   }, [selectedStationIds]);
 
-  // Use a ref to always access the latest selectedStationIds without causing re-renders
-  const selectedStationIdsRef = useRef(selectedStationIds);
-  useEffect(() => {
-    selectedStationIdsRef.current = selectedStationIds;
-  }, [selectedStationIds]);
-
-  const fetchData = useCallback(async (showRefreshing = false, allowQuickRetry = true) => {
-    // Use ref to get current station IDs without making fetchData depend on order changes
-    const currentStationIds = selectedStationIdsRef.current;
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    const currentStationIds = selectedStationIds;
 
     if (currentStationIds.length === 0) {
       const emptyData = { arrivals: [], alerts: [], lastUpdated: Math.floor(Date.now() / 1000) };
       setData(emptyData);
-      dataRef.current = emptyData;
       setError(null);
       setRefreshing(false);
       setLoading(false);
-      hasDataRef.current = false;
       return;
     }
 
     try {
-      // If we already have data, use refreshing state instead of loading to avoid blanking the page
-      // Use ref to check current data state to avoid stale closures
-      const hasExistingData = dataRef.current !== null && dataRef.current.arrivals.length > 0;
-      const shouldShowRefreshing = showRefreshing || hasExistingData || hasDataRef.current;
+      const shouldShowRefreshing = showRefreshing || data !== null;
       if (shouldShowRefreshing) {
         setRefreshing(true);
-        // Ensure loading is false when refreshing to prevent skeleton from showing
         setLoading(false);
       } else {
         setLoading(true);
@@ -236,56 +206,13 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       }
 
       setData(result);
-      dataRef.current = result;
-      hasDataRef.current = true;
-      
-      // Remove stations from pending set after successful API response
-      // Only remove stations that appear in the response (even with 0 arrivals)
-      // If a station was requested but doesn't appear in response, keep it pending
-      // (this handles cases where API hasn't processed the station yet)
-      const stationsInResponse = new Set<string>(result.arrivals.map((a: TrainArrival) => a.stationId));
-      setPendingStations(prev => {
-        const updated = new Set(prev);
-        // Only remove stations that appear in the API response
-        // This means the API successfully processed them (even if they have 0 arrivals)
-        stationsInResponse.forEach((id) => updated.delete(id));
-        return updated;
-      });
-
-      if (allowQuickRetry) {
-        const arrivals = result.arrivals || [];
-        const arrivalsByStation = new Map<string, Set<string>>();
-        arrivals.forEach((a: TrainArrival) => {
-          if (!arrivalsByStation.has(a.stationId)) {
-            arrivalsByStation.set(a.stationId, new Set());
-          }
-          arrivalsByStation.get(a.stationId)!.add(a.routeId);
-        });
-
-        const shouldQuickRetry = stationConfigsRef.current.some(config => {
-          const expectedRoutes = getRoutesForStation(config.stationId).map(r => r.routeId);
-          if (expectedRoutes.length === 0) return false;
-          const arrivalRoutes = arrivalsByStation.get(config.stationId) || new Set<string>();
-          if (arrivalRoutes.size === 0) return true;
-          return arrivalRoutes.size < expectedRoutes.length;
-        });
-
-        if (shouldQuickRetry && quickRetryTimeoutRef.current === null) {
-          quickRetryTimeoutRef.current = window.setTimeout(() => {
-            quickRetryTimeoutRef.current = null;
-            fetchData(true, false);
-          }, 5000);
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-      hasDataRef.current = false;
-      // Don't clear dataRef on error - keep existing data visible
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []); // Uses ref to access current station IDs, no dependencies needed
+  }, [data, selectedStationIds]);
 
   // Expose refresh function via ref
   useImperativeHandle(ref, () => ({
@@ -295,24 +222,17 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStationIdsKey, selectedStationIds.length]);
-  // Note: fetchData is intentionally excluded from deps to avoid re-fetching on reorder
-  // selectedStationIdsKey already captures when actual station IDs change
+  }, [fetchData, selectedStationIdsKey, selectedStationIds.length]);
 
   useEffect(() => {
     if (selectedStationIds.length === 0) return;
     
-    // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
       fetchData(true);
     }, 30000);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStationIdsKey, selectedStationIds.length]);
-  // Note: fetchData is intentionally excluded from deps to avoid re-fetching on reorder
-  // selectedStationIdsKey already captures when actual station IDs change
+  }, [fetchData, selectedStationIdsKey, selectedStationIds.length]);
 
   // Fetch weather data for NYC
   useEffect(() => {
@@ -379,37 +299,12 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   };
 
   const handleStationsChange = (stationIds: string[]) => {
-    // Add new stations with default direction 'all'
-    const currentStationIds = stationConfigs.map(c => c.stationId);
-    const newStationIds = stationIds.filter(id => !currentStationIds.includes(id));
-    
     const newConfigs: StationConfig[] = stationIds.map(id => {
       const existing = stationConfigs.find(c => c.stationId === id);
       return existing || { stationId: id, direction: 'all', selectedRoutes: [] };
     });
     setStationConfigs(newConfigs);
-    
-    // Mark newly added stations as pending (waiting for API data)
-    if (newStationIds.length > 0) {
-      setPendingStations(prev => {
-        const updated = new Set(prev);
-        newStationIds.forEach(id => updated.add(id));
-        return updated;
-      });
-    }
-    
-    // Remove stations that were removed from pending (only keep stations that are still selected)
-    setPendingStations(prev => {
-      const updated = new Set<string>();
-      prev.forEach(id => {
-        if (stationIds.includes(id)) {
-          updated.add(id);
-        }
-      });
-      return updated;
-    });
-    
-    // Clear any filtered stations that were removed
+
     setFilteredStationIds(prev => prev.filter(id => stationIds.includes(id)));
   };
 
@@ -511,7 +406,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     return grouped;
   }, [data]);
 
-  // Group alerts by station, filtering by routes at each station
   const alertsByStation = useMemo(() => {
     if (!data) return {};
 
@@ -519,53 +413,36 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
     stationConfigs.forEach(config => {
       const stationId = config.stationId;
-      const stationRoutes = getRoutesForStation(stationId).map(r => r.routeId);
-
-      // Get the routes to filter by (selected routes or all routes at station)
       const routesToMatch = config.selectedRoutes && config.selectedRoutes.length > 0
         ? config.selectedRoutes
-        : stationRoutes;
+        : getRoutesForStation(stationId).map((route) => route.routeId);
+      const routesToMatchSet = new Set(routesToMatch);
 
-      // Filter alerts to only those affecting routes at this station
-      const filteredAlerts = data.alerts.filter(alert => {
-        // If alert has no affected routes specified, it's system-wide (show it)
+      grouped[stationId] = data.alerts.filter((alert) => {
         if (alert.affectedRoutes.length === 0) {
           return true;
         }
 
-        // Otherwise, check if any affected route matches the routes we care about
-        return alert.affectedRoutes.some(routeId => routesToMatch.includes(routeId));
+        return alert.affectedRoutes.some((routeId) => routesToMatchSet.has(routeId));
       });
-
-      // Deduplicate alerts by content (header + description) to prevent showing the same alert twice
-      // This handles cases where MTA assigns different IDs to the same alert content
-      // We deduplicate by text only - if the text is identical, it's the same alert
-      const normalizeText = (text: string): string => {
-        return (text || '')
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, ' '); // Collapse multiple whitespace into single space
-      };
-      const seenContent = new Set<string>();
-      const stationAlerts = filteredAlerts.filter(alert => {
-        // Create a content-based key for deduplication (matching API logic)
-        const header = normalizeText(alert.headerText);
-        const description = normalizeText(alert.descriptionText);
-        const contentKey = `${header}|${description}`;
-        
-        if (seenContent.has(contentKey)) {
-          return false; // Already seen this content
-        }
-        
-        seenContent.add(contentKey);
-        return true;
-      });
-
-      grouped[stationId] = stationAlerts;
     });
 
     return grouped;
   }, [data, stationConfigs]);
+
+  const visibleStationConfigs = useMemo(() => {
+    if (filteredStationIds.length === 0) {
+      return stationConfigs;
+    }
+
+    const filteredSet = new Set(filteredStationIds);
+    return stationConfigs.filter((config) => filteredSet.has(config.stationId));
+  }, [filteredStationIds, stationConfigs]);
+
+  const visibleStationIds = useMemo(
+    () => visibleStationConfigs.map((config) => config.stationId),
+    [visibleStationConfigs]
+  );
 
   if (loading) {
     return (
@@ -706,42 +583,24 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          {(() => {
-            // Compute visible stations to ensure SortableContext items match rendered children
-            const hasFilteredStations = filteredStationIds.length > 0;
-            const visibleConfigs = hasFilteredStations
-              ? stationConfigs.filter(c => filteredStationIds.includes(c.stationId))
-              : stationConfigs;
-            const visibleStationIds = visibleConfigs.map(c => c.stationId);
-            
-            return (
-              <SortableContext
-                items={visibleStationIds}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-4">
-                  {visibleConfigs.map((config) => {
-                    const arrivals = arrivalsByStation[config.stationId] || [];
-                    const alerts = alertsByStation[config.stationId] || [];
-                    const isPending = pendingStations.has(config.stationId);
-                    
-                    return (
-                      <SortableStationCard
-                        key={config.stationId}
-                        config={config}
-                        arrivals={arrivals}
-                        alerts={alerts}
-                        isPending={isPending}
-                        onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
-                        onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
-                        showDragHandle={stationConfigs.length > 1}
-                      />
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            );
-          })()}
+          <SortableContext
+            items={visibleStationIds}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
+              {visibleStationConfigs.map((config) => (
+                <SortableStationCard
+                  key={config.stationId}
+                  config={config}
+                  arrivals={arrivalsByStation[config.stationId] || []}
+                  alerts={alertsByStation[config.stationId] || []}
+                  onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
+                  onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                  showDragHandle={stationConfigs.length > 1}
+                />
+              ))}
+            </div>
+          </SortableContext>
         </DndContext>
       )}
 
@@ -762,13 +621,12 @@ interface SortableStationCardProps {
   config: StationConfig;
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
-  isPending: boolean;
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   onRouteToggle: (routeId: string) => void;
   showDragHandle: boolean;
 }
 
-function SortableStationCard({ config, arrivals, alerts, isPending, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
+function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -799,7 +657,6 @@ function SortableStationCard({ config, arrivals, alerts, isPending, onDirectionC
           arrivals={arrivals}
           alerts={alerts}
           direction={config.direction}
-          isPending={isPending}
           onDirectionChange={onDirectionChange}
           selectedRoutes={config.selectedRoutes}
           onRouteToggle={onRouteToggle}
