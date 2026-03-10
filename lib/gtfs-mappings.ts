@@ -17,15 +17,6 @@ export interface Route {
   textColor: string;
 }
 
-export interface RouteToStationsMapping {
-  [routeId: string]: {
-    route: Route;
-    stations: Station[];
-    northboundStations: Station[];
-    southboundStations: Station[];
-  };
-}
-
 export interface StationToRoutesMapping {
   [stopId: string]: {
     station: Station;
@@ -81,7 +72,6 @@ function parseCSVLine(line: string): string[] {
 }
 
 export function generateMappings(gtfsDir: string): {
-  routeToStations: RouteToStationsMapping;
   stationToRoutes: StationToRoutesMapping;
   routes: Route[];
   stations: Station[];
@@ -150,8 +140,6 @@ export function generateMappings(gtfsDir: string): {
   });
 
   // Build route to stops and stop to routes mappings
-  const routeStopsNorthbound = new Map<string, Set<string>>();
-  const routeStopsSouthbound = new Map<string, Set<string>>();
   const stopRoutesNorthbound = new Map<string, Set<string>>();
   const stopRoutesSouthbound = new Map<string, Set<string>>();
 
@@ -173,61 +161,16 @@ export function generateMappings(gtfsDir: string): {
     // Skip if we don't have this station in our map
     if (!stationsMap.has(parentStopId)) return;
 
-    // Add to route -> stops mapping
     if (isNorthbound) {
-      if (!routeStopsNorthbound.has(routeId)) {
-        routeStopsNorthbound.set(routeId, new Set());
-      }
-      routeStopsNorthbound.get(routeId)!.add(parentStopId);
-
       if (!stopRoutesNorthbound.has(parentStopId)) {
         stopRoutesNorthbound.set(parentStopId, new Set());
       }
       stopRoutesNorthbound.get(parentStopId)!.add(routeId);
     } else if (isSouthbound) {
-      if (!routeStopsSouthbound.has(routeId)) {
-        routeStopsSouthbound.set(routeId, new Set());
-      }
-      routeStopsSouthbound.get(routeId)!.add(parentStopId);
-
       if (!stopRoutesSouthbound.has(parentStopId)) {
         stopRoutesSouthbound.set(parentStopId, new Set());
       }
       stopRoutesSouthbound.get(parentStopId)!.add(routeId);
-    }
-  });
-
-  // Build final mappings
-  const routeToStations: RouteToStationsMapping = {};
-
-  routes.forEach((route) => {
-    const northboundStopIds = routeStopsNorthbound.get(route.routeId) || new Set();
-    const southboundStopIds = routeStopsSouthbound.get(route.routeId) || new Set();
-
-    const allStopIds = new Set([...northboundStopIds, ...southboundStopIds]);
-
-    const allStations = Array.from(allStopIds)
-      .map((id) => stationsMap.get(id)!)
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    const northboundStations = Array.from(northboundStopIds)
-      .map((id) => stationsMap.get(id)!)
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    const southboundStations = Array.from(southboundStopIds)
-      .map((id) => stationsMap.get(id)!)
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    if (allStations.length > 0) {
-      routeToStations[route.routeId] = {
-        route,
-        stations: allStations,
-        northboundStations,
-        southboundStations,
-      };
     }
   });
 
@@ -265,7 +208,6 @@ export function generateMappings(gtfsDir: string): {
   });
 
   return {
-    routeToStations,
     stationToRoutes,
     routes,
     stations,
@@ -320,14 +262,10 @@ if (require.main === module) {
   const outputDir = path.join(__dirname, "..", "lib");
 
   console.log("Parsing GTFS data...");
-  const { routeToStations, stationToRoutes, routes, stations } =
-    generateMappings(gtfsDir);
+  const { stationToRoutes, routes, stations } = generateMappings(gtfsDir);
 
   console.log(`Found ${routes.length} routes`);
   console.log(`Found ${stations.length} stations`);
-  console.log(
-    `Routes with stations: ${Object.keys(routeToStations).length}`
-  );
   console.log(
     `Stations with routes: ${Object.keys(stationToRoutes).length}`
   );
@@ -339,11 +277,6 @@ if (require.main === module) {
 
   // Save mappings as JSON files
   fs.writeFileSync(
-    path.join(outputDir, "route-to-stations.json"),
-    JSON.stringify(routeToStations, null, 2)
-  );
-
-  fs.writeFileSync(
     path.join(outputDir, "station-to-routes.json"),
     JSON.stringify(stationToRoutes, null, 2)
   );
@@ -353,36 +286,7 @@ if (require.main === module) {
     JSON.stringify(routeHeadsigns, null, 2)
   );
 
-  // Also create simplified versions for quick lookups
-  const simpleRouteToStations: Record<string, string[]> = {};
-  Object.entries(routeToStations).forEach(([routeId, data]) => {
-    simpleRouteToStations[routeId] = data.stations.map((s) => s.stopId);
-  });
-
-  const simpleStationToRoutes: Record<string, string[]> = {};
-  Object.entries(stationToRoutes).forEach(([stationId, data]) => {
-    simpleStationToRoutes[stationId] = data.routes.map((r) => r.routeId);
-  });
-
-  fs.writeFileSync(
-    path.join(outputDir, "simple-route-to-stations.json"),
-    JSON.stringify(simpleRouteToStations, null, 2)
-  );
-
-  fs.writeFileSync(
-    path.join(outputDir, "simple-station-to-routes.json"),
-    JSON.stringify(simpleStationToRoutes, null, 2)
-  );
-
   console.log("Mappings saved to lib/ directory");
-
-  // Print some examples
-  console.log("\n--- Example: A train stations ---");
-  const aTrain = routeToStations["A"];
-  if (aTrain) {
-    console.log(`A train serves ${aTrain.stations.length} stations`);
-    console.log("First 5:", aTrain.stations.slice(0, 5).map((s) => s.name));
-  }
 
   console.log("\n--- Example: Times Sq-42 St routes ---");
   const timesSq = stationToRoutes["127"]; // Times Sq station ID

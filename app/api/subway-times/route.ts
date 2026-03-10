@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { transit_realtime } from 'gtfs-realtime-bindings';
-import { parseGTFSFeed } from '@/lib/subway-parser';
+import { parseGTFSFeed, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation, getStation } from '@/lib/subway-data';
 import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
 
@@ -57,6 +57,28 @@ const FEED_REQUEST_TIMEOUT_MS = 10000;
 
 // Force dynamic rendering to prevent caching - ensures fresh data when new stations are added
 export const dynamic = 'force-dynamic';
+
+function normalizeAlertText(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getAlertContentKey(alert: ServiceAlert): string {
+  return `${normalizeAlertText(alert.headerText)}|${normalizeAlertText(alert.descriptionText)}`;
+}
+
+function addAlertWithDeduplication(
+  alert: ServiceAlert,
+  alertsById: Map<string, ServiceAlert>,
+  alertsByContent: Map<string, ServiceAlert>
+) {
+  const contentKey = getAlertContentKey(alert);
+  if (alertsById.has(alert.id) || alertsByContent.has(contentKey)) {
+    return;
+  }
+
+  alertsById.set(alert.id, alert);
+  alertsByContent.set(contentKey, alert);
+}
 
 export async function GET(request: Request) {
   try {
@@ -167,7 +189,8 @@ export async function GET(request: Request) {
     }
 
     // Collect all target stop IDs
-    const allTargetStopIds = stationConfigs.flatMap(c => c.stopIds);
+    const allTargetStopIds = Array.from(new Set(stationConfigs.flatMap((config) => config.stopIds)));
+    const stationRouteIds = Array.from(stationRoutes);
 
     const headers: HeadersInit = {};
     if (process.env.MTA_API_KEY) {
@@ -192,11 +215,11 @@ export async function GET(request: Request) {
       const buffer = await response.arrayBuffer();
       const feedMessage = transit_realtime.FeedMessage.decode(new Uint8Array(buffer));
       
-      return { feedKey, feedMessage };
+      return feedMessage;
     });
 
     const feedResults = await Promise.all(feedPromises);
-    const validFeeds = feedResults.filter((f): f is { feedKey: string; feedMessage: transit_realtime.FeedMessage } => f !== null);
+    const validFeeds = feedResults.filter((feed): feed is transit_realtime.FeedMessage => feed !== null);
 
     let alertsFeed: transit_realtime.FeedMessage | null = null;
     try {
@@ -218,50 +241,21 @@ export async function GET(request: Request) {
     }
 
     // Parse all feeds
-    const allArrivals: Array<import('@/lib/subway-parser').TrainArrival> = [];
-    const alertsById = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
-    // Also deduplicate by content to catch alerts with different IDs but same content
-    const alertsByContent = new Map<string, import('@/lib/subway-parser').ServiceAlert>();
+    const allArrivals: TrainArrival[] = [];
+    const alertsById = new Map<string, ServiceAlert>();
+    const alertsByContent = new Map<string, ServiceAlert>();
 
-    // Helper function to create a content-based key for deduplication
-    const getAlertContentKey = (alert: import('@/lib/subway-parser').ServiceAlert): string => {
-      // Normalize text by trimming, lowercasing, and collapsing whitespace for comparison
-      // We deduplicate by text only - if the text is identical, it's the same alert
-      // regardless of which routes are affected (routes are just metadata)
-      const normalizeText = (text: string): string => {
-        return (text || '')
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, ' '); // Collapse multiple whitespace into single space
-      };
-      const header = normalizeText(alert.headerText);
-      const description = normalizeText(alert.descriptionText);
-      return `${header}|${description}`;
-    };
-
-    for (const { feedKey, feedMessage } of validFeeds) {
+    for (const feedMessage of validFeeds) {
       const { arrivals, alerts } = parseGTFSFeed(
         feedMessage,
         allTargetStopIds,
-        Array.from(stationRoutes)
+        stationRouteIds
       );
-
-      const arrivalsByRouteForFeed = arrivals.reduce((acc: Record<string, number>, arrival) => {
-        acc[arrival.routeId] = (acc[arrival.routeId] || 0) + 1;
-        return acc;
-      }, {});
 
       allArrivals.push(...arrivals);
 
-      // Deduplicate alerts by ID and content
       for (const alert of alerts) {
-        const contentKey = getAlertContentKey(alert);
-        
-        // Check if we've seen this alert by ID or content
-        if (!alertsById.has(alert.id) && !alertsByContent.has(contentKey)) {
-          alertsById.set(alert.id, alert);
-          alertsByContent.set(contentKey, alert);
-        }
+        addAlertWithDeduplication(alert, alertsById, alertsByContent);
       }
     }
 
@@ -270,18 +264,11 @@ export async function GET(request: Request) {
       const { alerts } = parseGTFSFeed(
         alertsFeed,
         allTargetStopIds,
-        Array.from(stationRoutes)
+        stationRouteIds
       );
 
-      // Deduplicate alerts by ID and content
       for (const alert of alerts) {
-        const contentKey = getAlertContentKey(alert);
-        
-        // Check if we've seen this alert by ID or content
-        if (!alertsById.has(alert.id) && !alertsByContent.has(contentKey)) {
-          alertsById.set(alert.id, alert);
-          alertsByContent.set(contentKey, alert);
-        }
+        addAlertWithDeduplication(alert, alertsById, alertsByContent);
       }
     }
 
@@ -289,11 +276,6 @@ export async function GET(request: Request) {
 
     // Sort arrivals by arrival time
     allArrivals.sort((a, b) => a.arrivalTime - b.arrivalTime);
-
-    const arrivalsByRouteLog = allArrivals.reduce((acc: Record<string, number>, arrival) => {
-      acc[arrival.routeId] = (acc[arrival.routeId] || 0) + 1;
-      return acc;
-    }, {});
 
     // Filter alerts to only active ones
     const now = Math.floor(Date.now() / 1000);
@@ -303,11 +285,6 @@ export async function GET(request: Request) {
         return isActive;
       });
     });
-
-    const arrivalsByStationLog = allArrivals.reduce((acc: Record<string, number>, arrival) => {
-      acc[arrival.stationId] = (acc[arrival.stationId] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
 
     return NextResponse.json({
       arrivals: allArrivals,

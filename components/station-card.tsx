@@ -7,15 +7,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { formatArrivalTime, formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
-import { SplitFlapTime } from '@/components/split-flap-time';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface StationCardProps {
   stationId: string;
   arrivals: TrainArrival[];
   alerts: ServiceAlert[];
   direction: 'all' | 'N' | 'S';
-  isPending?: boolean;
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   selectedRoutes?: string[];
   onRouteToggle: (routeId: string) => void;
@@ -23,7 +20,7 @@ interface StationCardProps {
 
 const INITIAL_TRAINS_TO_SHOW = 5;
 
-export function StationCard({ stationId, arrivals, alerts, direction, isPending = false, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
+export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -55,13 +52,6 @@ export function StationCard({ stationId, arrivals, alerts, direction, isPending 
     
     return filtered;
   }, [arrivals, direction, selectedRoutes]);
-
-  // Filter alerts for this station's routes
-  const stationAlerts = useMemo(() => {
-    // Note: This is a simplified check - real alerts might have more complex matching
-    // Show all alerts for now
-    return alerts;
-  }, [alerts]);
 
   const displayedArrivals = isExpanded 
     ? filteredArrivals 
@@ -199,9 +189,9 @@ export function StationCard({ stationId, arrivals, alerts, direction, isPending 
       {!isCollapsed && (
         <CardContent className="space-y-4">
         {/* Service Alerts */}
-        {stationAlerts.length > 0 && (
+        {alerts.length > 0 && (
           <div className="space-y-2">
-            {stationAlerts.map((alert) => (
+            {alerts.map((alert) => (
               <Alert key={alert.id} variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>{alert.headerText}</AlertTitle>
@@ -215,17 +205,9 @@ export function StationCard({ stationId, arrivals, alerts, direction, isPending 
 
         {/* Train Arrivals */}
         {filteredArrivals.length === 0 ? (
-          isPending ? (
-            <div className="space-y-2">
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No trains scheduled at this time
-            </div>
-          )
+          <div className="text-center py-8 text-muted-foreground">
+            No trains scheduled at this time
+          </div>
         ) : (
           <div className="space-y-2">
             {displayedArrivals.map((arrival, index) => {
@@ -239,17 +221,15 @@ export function StationCard({ stationId, arrivals, alerts, direction, isPending 
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <SplitFlapTime value={arrival.routeId}>
-                      <Badge
-                        className="text-lg px-3 py-1"
-                        style={{
-                          backgroundColor: `#${routeColor}`,
-                          color: badgeColor,
-                        }}
-                      >
-                        {arrival.routeId}
-                      </Badge>
-                    </SplitFlapTime>
+                    <Badge
+                      className="text-lg px-3 py-1"
+                      style={{
+                        backgroundColor: `#${routeColor}`,
+                        color: badgeColor,
+                      }}
+                    >
+                      {arrival.routeId}
+                    </Badge>
                     <div>
                       <div className="font-semibold">{arrival.destination}</div>
                       {arrival.trainId && (
@@ -260,11 +240,9 @@ export function StationCard({ stationId, arrivals, alerts, direction, isPending 
                     </div>
                   </div>
                   <div className="text-right">
-                    <SplitFlapTime value={arrival.arrivalTimeSeconds}>
-                      <div className="text-2xl font-bold">
-                        {formatArrivalTime(arrival.arrivalTimeSeconds)}
-                      </div>
-                    </SplitFlapTime>
+                    <div className="text-2xl font-bold">
+                      {formatArrivalTime(arrival.arrivalTimeSeconds)}
+                    </div>
                     <div className="text-sm text-muted-foreground">
                       {formatTime(arrival.arrivalTime)}
                     </div>
