@@ -204,6 +204,27 @@
     animation: ignite 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
 
+  /* Sustained "engines lit" state on an arriving row: ember glow along the base that flickers gently. */
+  .engines-lit {
+    border-color: color-mix(in oklab, var(--ignition) 70%, transparent);
+    box-shadow:
+      inset 0 -1px 0 0 var(--ignition),
+      0 0 18px -6px color-mix(in oklab, var(--ignition) 60%, transparent);
+  }
+  .engines-lit::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: radial-gradient(
+      ellipse 70% 120% at 50% 130%,
+      color-mix(in oklab, var(--ignition) 22%, transparent),
+      transparent 70%
+    );
+    animation: engine-flicker 1.6s ease-in-out infinite;
+  }
+
   .pulse-dot {
     position: relative;
     display: inline-block;
@@ -311,6 +332,12 @@
     box-shadow: 0 0 0 0 transparent;
   }
 }
+@keyframes engine-flicker {
+  0%, 100% { opacity: 0.75; }
+  40% { opacity: 1; }
+  55% { opacity: 0.6; }
+  70% { opacity: 0.95; }
+}
 @keyframes ping-soft {
   0% { transform: scale(1); opacity: 0.7; }
   80%, 100% { transform: scale(2.6); opacity: 0; }
@@ -344,6 +371,7 @@
   .starfield::after,
   .scanline::after,
   .ignite,
+  .engines-lit::after,
   .pulse-dot::after,
   .blink,
   .shimmer,
