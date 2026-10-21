@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Rocket, SatelliteDish } from 'lucide-react';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
+import { TrajectoryPlot } from '@/components/trajectory-plot';
 
 interface StationCardProps {
   stationId: string;
@@ -207,6 +208,10 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                 </div>
               ))}
             </div>
+          )}
+
+          {filteredArrivals.length > 0 && (
+            <TrajectoryPlot stationId={stationId} arrivals={filteredArrivals} direction={direction} now={now} />
           )}
 
           {/* Train Arrivals */}
