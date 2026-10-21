@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Rocket, SatelliteDish } from 'lucide-react';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
+import { IgnitionBurst, shakeElement, useIgnition, usePrefersReducedMotion } from './ignition';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 
 interface StationCardProps {
@@ -42,6 +43,10 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const now = useNowSeconds();
+  const panelRef = useRef<HTMLElement>(null);
+  const igniteOriginRef = useRef<HTMLSpanElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
+  const [burstSeq, setBurstSeq] = useState(0);
 
   const station = getStation(stationId);
   const routes = getRoutesForStation(stationId);
@@ -76,6 +81,14 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
     ? filteredArrivals
     : filteredArrivals.slice(0, INITIAL_TRAINS_TO_SHOW);
 
+  const ignition = useIgnition(filteredArrivals, now, ARRIVING_THRESHOLD_SECONDS);
+  const ignitedArrival = ignition && filteredArrivals.find(a => a.tripId === ignition.tripId);
+  const isBursting = !!ignition && ignition.seq !== burstSeq && !reducedMotion;
+
+  useEffect(() => {
+    if (ignition && !reducedMotion) shakeElement(panelRef.current);
+  }, [ignition, reducedMotion]);
+
   const hasMore = filteredArrivals.length > INITIAL_TRAINS_TO_SHOW;
   const hasAlerts = alerts.length > 0;
 
@@ -90,7 +103,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   ];
 
   return (
-    <section className={`hud-panel scanline ignite w-full ${hasAlerts ? 'hud-panel-accent' : ''}`}>
+    <section ref={panelRef} className={`hud-panel scanline ignite w-full ${hasAlerts ? 'hud-panel-accent' : ''}`}>
       {/* Header strip */}
       <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
         <div className="hud-label flex items-center gap-2">
@@ -183,6 +196,10 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
         )}
       </div>
 
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {ignitedArrival ? `${ignitedArrival.routeId} train to ${ignitedArrival.destination} arriving at ${station.name}` : ''}
+      </div>
+
       {!isCollapsed && (
         <div className="px-4 sm:px-6 pb-6 space-y-4">
           <div className="hud-divider" />
@@ -230,17 +247,22 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                   const secondsLeft = Math.max(0, arrival.arrivalTime - now);
                   const isArriving = secondsLeft < ARRIVING_THRESHOLD_SECONDS;
                   const isNext = index === 0;
+                  const isIgnited = ignition?.tripId === arrival.tripId;
 
                   return (
                     <li
                       key={`${arrival.tripId}-${index}`}
-                      className={`relative flex items-center justify-between gap-4 border px-3 sm:px-4 py-3 transition-colors hover:bg-muted/40 ${
+                      className={`relative isolate flex items-center justify-between gap-4 border px-3 sm:px-4 py-3 transition-colors hover:bg-muted/40 ${
                         isNext ? 'border-ignition/50 bg-ignition/[0.06]' : 'bg-background/30'
-                      }`}
+                      } ${isArriving ? 'engines-lit' : ''}`}
                     >
                       {isNext && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-ignition" aria-hidden="true" />}
-                      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      {isIgnited && isBursting && (
+                        <IgnitionBurst key={ignition.seq} originRef={igniteOriginRef} onDone={() => setBurstSeq(ignition.seq)} />
+                      )}
+                      <div className="relative z-10 flex items-center gap-3 sm:gap-4 min-w-0">
                         <span
+                          ref={isIgnited ? igniteOriginRef : undefined}
                           className="route-bullet h-10 w-10 text-lg shrink-0"
                           style={{
                             backgroundColor: `#${routeColor}`,
@@ -267,7 +289,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                           )}
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
+                      <div className="relative z-10 text-right shrink-0">
                         {isArriving ? (
                           <div className="font-mono text-xl sm:text-2xl font-bold text-ignition uppercase tracking-wider flex items-center justify-end gap-2">
                             <span className="pulse-dot" />
