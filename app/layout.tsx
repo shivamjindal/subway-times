@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SpaceBackdrop } from "@/components/space/space-backdrop";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/barlow-condensed/500.css";
 import "@fontsource/barlow-condensed/600.css";
@@ -30,6 +31,7 @@ export default function RootLayout({
           <div className="starfield" aria-hidden="true">
             <span />
           </div>
+          <SpaceBackdrop />
           <div className="relative z-10">{children}</div>
         </ThemeProvider>
         <Analytics />

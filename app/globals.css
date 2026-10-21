@@ -284,6 +284,34 @@
   mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 75%);
 }
 
+/* Once the WebGL starfield is live it replaces the CSS stars; nebula glow and grid stay. */
+[data-webgl-stars] .starfield::before,
+[data-webgl-stars] .starfield::after {
+  display: none;
+}
+
+/* Flat-shaded globe: first paint and no-WebGL fallback for the header Earth. */
+.earth-static {
+  border-radius: 9999px;
+  /* 200% width shows one hemisphere; 8.9% x-offset centers it on 74°W. */
+  background: #0b1630 url("/textures/earth-blue-marble-1024.jpg") 8.9% 50% / 200% 100% no-repeat;
+  box-shadow:
+    inset -6px -4px 10px rgb(0 0 0 / 0.75),
+    inset 2px 2px 6px rgb(255 255 255 / 0.12),
+    0 0 10px 1px color-mix(in oklab, var(--telemetry) 45%, transparent);
+}
+.earth-static-beacon {
+  position: absolute;
+  top: 27%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 9999px;
+  background: var(--ignition);
+  box-shadow: 0 0 6px 1px var(--ignition);
+}
+
 @keyframes drift {
   from { transform: translateY(0); }
   to { transform: translateY(50%); }
