@@ -339,7 +339,15 @@
   animation: sweep 2.4s linear infinite;
 }
 
+/* One-second linear slew matches the 1 Hz countdown tick, so the arc drains continuously. */
+.telemetry-arc {
+  transition: stroke-dashoffset 1s linear, stroke 300ms ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .telemetry-arc {
+    transition: none;
+  }
   .starfield::before,
   .starfield::after,
   .scanline::after,
