@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Orbit, RefreshCcw } from 'lucide-react';
 import { SubwayTimesDisplay, type SubwayTimesDisplayRef } from '@/components/subway-times-display';
 import { SettingsButton } from '@/components/settings-button';
+import { HeaderEarth } from '@/components/space/header-earth';
 
 function MissionClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -46,7 +47,7 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <header className="sticky top-0 z-50 border-b bg-background/70 backdrop-blur-md">
-        <div className="container mx-auto max-w-6xl px-4 h-16 flex items-center justify-between gap-4">
+        <div className="container mx-auto max-w-6xl px-4 h-16 md:h-20 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative h-9 w-9 shrink-0 flex items-center justify-center border border-foreground/30">
               <Orbit className="h-5 w-5 text-telemetry animate-orbit-slow" />
@@ -57,7 +58,8 @@ export default function Home() {
               <h1 className="hud-title text-2xl font-bold mt-1 truncate">Subway Times</h1>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-5">
+            <HeaderEarth />
             <MissionClock />
             <div className="flex items-center gap-2">
               <button

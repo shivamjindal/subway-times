@@ -20,6 +20,7 @@ Minimal Next.js app for real-time NYC subway arrivals, service alerts, and a wea
 - dnd-kit
 - gtfs-realtime-bindings
 - next-themes
+- three.js via @react-three/fiber + @react-three/drei (header Earth, starfield; lazy-loaded, client-only)
 
 ## Local development
 
@@ -80,6 +81,7 @@ Returns:
 
 - MTA GTFS-Realtime feeds (arrivals + subway alerts)
 - National Weather Service API (`api.weather.gov`)
+- Earth texture (`public/textures/earth-blue-marble-1024.jpg`): NASA Blue Marble via Visible Earth, public domain ([Wikimedia Commons source](https://commons.wikimedia.org/wiki/File:Whole_world_-_land_and_oceans.jpg)), downscaled to 1024×512
 
 ## Notes
 
