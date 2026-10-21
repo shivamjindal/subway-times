@@ -3,10 +3,9 @@
 import { useEffect, useState, useMemo, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent } from '@/components/ui/card';
 import { type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation } from '@/lib/subway-data';
-import { AlertCircle, Cloud, CloudRain, Sun, Wind } from 'lucide-react';
+import { AlertCircle, Cloud, CloudRain, Orbit, Radar, Rocket, Satellite, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
 import {
@@ -277,11 +276,11 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const getWeatherIcon = (condition: string) => {
     const lowerCondition = condition.toLowerCase();
     if (lowerCondition.includes('rain') || lowerCondition.includes('shower')) {
-      return <CloudRain className="h-5 w-5" />;
+      return <CloudRain className="h-6 w-6" />;
     } else if (lowerCondition.includes('cloud')) {
-      return <Cloud className="h-5 w-5" />;
+      return <Cloud className="h-6 w-6" />;
     } else {
-      return <Sun className="h-5 w-5" />;
+      return <Sun className="h-6 w-6" />;
     }
   };
 
@@ -449,15 +448,12 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4 max-w-6xl">
-        <div className="mb-6">
-          <Skeleton className="h-12 w-full mb-4" />
-          <Skeleton className="h-20 w-full" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+      <div className="container mx-auto p-4 max-w-6xl space-y-6">
+        <AcquiringSignal label="Acquiring signal" detail="Establishing uplink with MTA real-time feeds…" />
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-56 w-full" />
+          <Skeleton className="h-56 w-full" />
         </div>
       </div>
     );
@@ -466,11 +462,15 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   if (error) {
     return (
       <div className="container mx-auto p-4 max-w-6xl">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
+          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <div className="hud-label !text-destructive mt-5">Telemetry error · Signal lost</div>
+          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
+          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
+          <p className="text-sm text-muted-foreground mt-4">Use the resync button in the top bar to try again.</p>
+        </div>
       </div>
     );
   }
@@ -479,9 +479,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     <div className="container mx-auto p-4 max-w-6xl">
       {/* Station Selector */}
       <div className="mb-6">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">Subway Times</h1>
-        </div>
         <StationSelector
           selectedStations={selectedStationIds}
           onStationsChange={handleStationsChange}
@@ -495,38 +492,47 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
         <>
           {weatherLoading ? (
             <div className="mb-6">
-              <Skeleton className="h-32 w-full" />
+              <AcquiringSignal compact label="Acquiring atmospheric data" detail="Contacting National Weather Service…" />
             </div>
           ) : weatherError ? (
             <div className="mb-6">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>Weather: {weatherError}</AlertDescription>
+                <AlertTitle className="font-mono text-xs uppercase tracking-[0.18em]">Weather uplink lost</AlertTitle>
+                <AlertDescription>{weatherError}</AlertDescription>
               </Alert>
             </div>
           ) : weather ? (
-            <Card className="mb-6">
-              <CardContent className="pt-6 space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-lg font-semibold">NYC Weather</h2>
+            <section className="hud-panel ignite mb-6">
+              <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
+                <div className="hud-label flex items-center gap-2">
+                  <Satellite className="h-3 w-3 text-telemetry" />
+                  Atmospheric conditions · NYC
                 </div>
+                <div className="hud-label">Weather</div>
+              </div>
+              <div className="px-4 sm:px-6 py-5 space-y-5">
                 {/* Current Weather */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-2xl font-bold">
-                      {getWeatherIcon(weather.current.condition)}
+                  <div>
+                    <div className="hud-label mb-2">Current</div>
+                    <div className="flex items-center gap-3 font-mono text-4xl font-bold tabular-nums">
+                      <span className="text-telemetry">{getWeatherIcon(weather.current.condition)}</span>
                       {weather.current.temperature}°F
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground mt-1">
                       {weather.current.condition}
                     </div>
                   </div>
-                  <div className="space-y-1 text-right">
-                    <div className="text-base font-semibold">
-                      H: {formatTemperatureValue(weather.today.high)} / L: {formatTemperatureValue(weather.today.low)}
+                  <div className="text-right">
+                    <div className="hud-label mb-2">High / Low</div>
+                    <div className="font-mono text-base font-semibold tabular-nums">
+                      <span className="text-ignition">H {formatTemperatureValue(weather.today.high)}</span>
+                      <span className="text-muted-foreground"> / </span>
+                      <span className="text-telemetry">L {formatTemperatureValue(weather.today.low)}</span>
                     </div>
-                    <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
-                      <Wind className="h-4 w-4" />
+                    <div className="flex items-center justify-end gap-1 font-mono text-xs text-muted-foreground mt-2">
+                      <Wind className="h-3.5 w-3.5" />
                       {weather.current.windSpeed}
                       {weather.current.windDirection !== 'N/A' && ` ${weather.current.windDirection}`}
                     </div>
@@ -536,29 +542,30 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
                 {/* Hourly Forecast */}
                 {weather.hourly && weather.hourly.length > 0 && (
                   <div className="space-y-3">
-                    <div className="text-sm font-semibold">Hourly Forecast</div>
-                    <div className="overflow-x-auto -mx-6 px-6">
-                      <div className="flex gap-3 pb-2 min-w-max">
+                    <div className="hud-divider" />
+                    <div className="hud-label">Hourly forecast · Next 12 hrs</div>
+                    <div className="overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+                      <div className="flex border divide-x min-w-max">
                         {weather.hourly.slice(0, 12).map((hour, index) => (
                           <div
                             key={index}
-                            className="flex flex-col items-center gap-2 p-4 min-w-[100px] border rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:from-muted/50 hover:to-muted/30 transition-all shadow-sm hover:shadow-md"
+                            className="flex flex-col items-center gap-2 px-4 py-3 min-w-[92px] bg-background/30 hover:bg-telemetry/10 transition-colors"
                           >
-                            <div className="text-sm font-semibold text-foreground">
+                            <div className="font-mono text-[0.7rem] text-muted-foreground uppercase">
                               {formatHourlyTime(hour.time)}
                             </div>
-                            <div className="text-2xl text-muted-foreground">
+                            <div className="text-foreground/80">
                               {getWeatherIcon(hour.condition)}
                             </div>
-                            <div className="text-lg font-bold text-foreground">
-                              {hour.temperature}°F
+                            <div className="font-mono text-lg font-bold tabular-nums">
+                              {hour.temperature}°
                             </div>
                             {hour.probabilityOfPrecipitation > 0 && (
-                              <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                                {hour.probabilityOfPrecipitation}%
+                              <div className="font-mono text-[0.7rem] font-medium text-telemetry">
+                                {hour.probabilityOfPrecipitation}% precip
                               </div>
                             )}
-                            <div className="text-xs text-muted-foreground text-center flex items-center gap-1">
+                            <div className="font-mono text-[0.65rem] text-muted-foreground text-center flex items-center gap-1">
                               <Wind className="h-3 w-3" />
                               {hour.windSpeed}
                             </div>
@@ -568,18 +575,15 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           ) : null}
         </>
       )}
 
       {/* Station Cards */}
       {selectedStationIds.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-lg mb-2">No stations selected</p>
-          <p className="text-sm">Search and select stations above to view train arrivals</p>
-        </div>
+        <AwaitingMission />
       ) : (
         <DndContext
           sensors={sensors}
@@ -590,7 +594,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
             items={visibleStationIds}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-4">
+            <div className="space-y-5">
               {visibleStationConfigs.map((config) => (
                 <SortableStationCard
                   key={config.stationId}
@@ -609,9 +613,15 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
       {/* Last Updated */}
       {data && selectedStationIds.length > 0 && (
-        <div className="text-xs text-muted-foreground text-center mt-6">
-          Last updated: {new Date(data.lastUpdated * 1000).toLocaleTimeString()}
-          {refreshing && <span className="ml-2">(refreshing...)</span>}
+        <div className="mt-8 flex items-center justify-center gap-3 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground">
+          <span className={refreshing ? 'text-telemetry' : 'text-nominal'}>
+            <span className="pulse-dot" />
+          </span>
+          <span>
+            Last telemetry sync {new Date(data.lastUpdated * 1000).toLocaleTimeString()}
+          </span>
+          <span className="text-border">|</span>
+          <span>{refreshing ? <span className="text-telemetry">Syncing…</span> : 'Auto-sync 30s'}</span>
         </div>
       )}
     </div>
@@ -664,6 +674,53 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRo
           selectedRoutes={config.selectedRoutes}
           onRouteToggle={onRouteToggle}
         />
+      </div>
+    </div>
+  );
+}
+
+function AcquiringSignal({ label, detail, compact = false }: { label: string; detail: string; compact?: boolean }) {
+  return (
+    <div role="status" aria-live="polite" className={`hud-panel scanline flex items-center gap-5 px-6 ${compact ? 'py-5' : 'py-8'}`}>
+      <div className={`relative shrink-0 rounded-full border border-telemetry/40 ${compact ? 'h-12 w-12' : 'h-16 w-16'}`}>
+        <div className="absolute inset-2 rounded-full border border-telemetry/20" />
+        <div
+          className="absolute inset-0 rounded-full animate-sweep"
+          style={{ background: 'conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, var(--telemetry) 55%, transparent) 60deg, transparent 61deg)' }}
+        />
+        <Radar className="absolute inset-0 m-auto h-5 w-5 text-telemetry" />
+      </div>
+      <div className="min-w-0">
+        <div className={`hud-title font-bold text-telemetry ${compact ? 'text-xl' : 'text-2xl sm:text-3xl'}`}>
+          {label}<span className="blink">…</span>
+        </div>
+        <div className="font-mono text-xs text-muted-foreground mt-1.5">{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function AwaitingMission() {
+  return (
+    <div className="hud-panel ignite px-6 py-14 text-center overflow-hidden">
+      <div className="relative mx-auto h-36 w-36">
+        <div className="absolute inset-0 rounded-full border border-dashed border-foreground/20" />
+        <div className="absolute inset-6 rounded-full border border-telemetry/30" />
+        <div className="absolute inset-0 animate-orbit">
+          <span className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-ignition shadow-[0_0_12px_var(--ignition)]" />
+        </div>
+        <div className="absolute inset-6 animate-orbit-slow">
+          <span className="absolute top-1/2 -right-1 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-telemetry shadow-[0_0_10px_var(--telemetry)]" />
+        </div>
+        <Orbit className="absolute inset-0 m-auto h-8 w-8 text-foreground/70" />
+      </div>
+      <div className="hud-label mt-8">Standby · No stations tracked</div>
+      <h2 className="hud-title text-3xl sm:text-4xl font-bold mt-2">Awaiting mission parameters</h2>
+      <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto">
+        Search for a station above to start tracking live train arrivals. Add as many as you like and drag to reorder.
+      </p>
+      <div className="mt-6 inline-flex items-center gap-2 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ignition">
+        <Rocket className="h-3.5 w-3.5" /> Ready for launch
       </div>
     </div>
   );

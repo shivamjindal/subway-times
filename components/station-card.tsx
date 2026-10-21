@@ -1,11 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
-import { formatArrivalTime, formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
+import { useState, useMemo, useEffect } from 'react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Rocket, SatelliteDish } from 'lucide-react';
+import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 
 interface StationCardProps {
@@ -19,19 +16,41 @@ interface StationCardProps {
 }
 
 const INITIAL_TRAINS_TO_SHOW = 5;
+const ARRIVING_THRESHOLD_SECONDS = 60;
+
+const stopDragPropagation = {
+  onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+  onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+};
+
+function useNowSeconds() {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, []);
+  return now;
+}
+
+function formatCountdown(secondsUntilArrival: number) {
+  const minutes = Math.floor(secondsUntilArrival / 60);
+  const seconds = secondsUntilArrival % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
 
 export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  
+  const now = useNowSeconds();
+
   const station = getStation(stationId);
   const routes = getRoutesForStation(stationId);
   const northboundRoutes = getNorthboundRoutesForStation(stationId);
   const southboundRoutes = getSouthboundRoutesForStation(stationId);
-  
+
   const hasNorthbound = northboundRoutes.length > 0;
   const hasSouthbound = southboundRoutes.length > 0;
-  
+
   // Get direction labels based on actual train destinations
   const northboundLabel = getDirectionLabel('N', arrivals);
   const southboundLabel = getDirectionLabel('S', arrivals);
@@ -39,248 +58,264 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   // Filter arrivals by direction and selected routes
   const filteredArrivals = useMemo(() => {
     let filtered = arrivals;
-    
+
     // Filter by direction
     if (direction !== 'all') {
       filtered = filtered.filter(a => a.direction === direction);
     }
-    
+
     // Filter by selected routes (if any are selected)
     if (selectedRoutes && selectedRoutes.length > 0) {
       filtered = filtered.filter(a => selectedRoutes.includes(a.routeId));
     }
-    
+
     return filtered;
   }, [arrivals, direction, selectedRoutes]);
 
-  const displayedArrivals = isExpanded 
-    ? filteredArrivals 
+  const displayedArrivals = isExpanded
+    ? filteredArrivals
     : filteredArrivals.slice(0, INITIAL_TRAINS_TO_SHOW);
-  
+
   const hasMore = filteredArrivals.length > INITIAL_TRAINS_TO_SHOW;
+  const hasAlerts = alerts.length > 0;
 
   if (!station) {
     return null;
   }
 
+  const directionOptions: Array<{ value: 'all' | 'N' | 'S'; label: string; show: boolean }> = [
+    { value: 'all', label: 'All', show: true },
+    { value: 'N', label: `↑ ${northboundLabel}`, show: hasNorthbound },
+    { value: 'S', label: `↓ ${southboundLabel}`, show: hasSouthbound },
+  ];
+
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <section className={`hud-panel scanline ignite w-full ${hasAlerts ? 'hud-panel-accent' : ''}`}>
+      {/* Header strip */}
+      <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
+        <div className="hud-label flex items-center gap-2">
+          <span className="text-ignition">■</span>
+          Launch Site · Station {station.stopId}
+        </div>
+        <div
+          className={`flex items-center gap-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase ${hasAlerts ? 'text-caution' : 'text-nominal'}`}
+          title={hasAlerts ? 'Service alerts active' : 'No active service alerts'}
+        >
+          <span className="pulse-dot" />
+          <span className="hidden sm:inline text-muted-foreground">Mission status:</span>
+          {hasAlerts ? `Advisory · ${alerts.length} alert${alerts.length > 1 ? 's' : ''}` : 'Nominal'}
+        </div>
+      </div>
+
+      <div className="px-4 sm:px-6 pt-5 pb-4 space-y-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <CardTitle className="flex items-center gap-2 flex-wrap">
-              {station.name}
+          <div className="flex-1 min-w-0">
+            <h2 className="hud-title text-3xl sm:text-4xl font-bold break-words">{station.name}</h2>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <span className="hud-label mr-1">Lines</span>
               {routes.map((route) => {
                 const color = getRouteColor(route.routeId);
                 const hasSelectedRoutes = selectedRoutes && selectedRoutes.length > 0;
                 const isSelected = selectedRoutes?.includes(route.routeId) ?? false;
                 // In default state (no routes selected), show all at 100% opacity
                 // When routes are selected, show selected at 100%, unselected at reduced opacity
-                const opacity = hasSelectedRoutes ? (isSelected ? 1 : 0.4) : 1;
+                const opacity = hasSelectedRoutes ? (isSelected ? 1 : 0.3) : 1;
                 return (
                   <button
                     key={route.routeId}
                     type="button"
                     onClick={() => onRouteToggle(route.routeId)}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    className="cursor-pointer transition-all hover:scale-105 active:scale-95"
+                    {...stopDragPropagation}
+                    className="cursor-pointer transition-all hover:scale-110 active:scale-95"
                     aria-label={isSelected ? `Deselect ${route.shortName} route` : `Select ${route.shortName} route`}
+                    aria-pressed={isSelected}
                   >
-                    <Badge
-                      className="text-sm transition-opacity"
+                    <span
+                      className="route-bullet h-7 w-7 text-sm transition-opacity"
                       style={{
                         backgroundColor: `#${color}`,
                         color: route.textColor === 'FFFFFF' ? 'white' : 'black',
-                        opacity: opacity,
+                        opacity,
+                        ['--route-color' as string]: `#${color}`,
                       }}
                     >
                       {route.shortName}
-                    </Badge>
+                    </span>
                   </button>
                 );
               })}
-            </CardTitle>
-            <CardDescription className="mt-1">
-              Next Trains
-            </CardDescription>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-            }}
-            className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0"
+            {...stopDragPropagation}
+            className="h-8 w-8 border flex items-center justify-center hover:border-telemetry hover:text-telemetry transition-colors flex-shrink-0"
             aria-label={isCollapsed ? 'Expand station' : 'Collapse station'}
           >
-            <ChevronsUpDown className={`h-5 w-5 text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+            <ChevronsUpDown className={`h-4 w-4 text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
           </button>
         </div>
-        
+
         {/* Direction Filter */}
         {(hasNorthbound || hasSouthbound) && (
-          <div className="flex gap-2 mt-3">
-            <button
-              type="button"
-              onClick={() => onDirectionChange('all')}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-              }}
-              className={`px-3 py-1 text-sm rounded transition-colors ${
-                direction === 'all'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted hover:bg-muted/80'
-              }`}
-            >
-              All
-            </button>
-            {hasNorthbound && (
-              <button
-                type="button"
-                onClick={() => onDirectionChange('N')}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                className={`px-3 py-1 text-sm rounded transition-colors ${
-                  direction === 'N'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted hover:bg-muted/80'
-                }`}
-              >
-                {northboundLabel}
-              </button>
-            )}
-            {hasSouthbound && (
-              <button
-                type="button"
-                onClick={() => onDirectionChange('S')}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                className={`px-3 py-1 text-sm rounded transition-colors ${
-                  direction === 'S'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted hover:bg-muted/80'
-                }`}
-              >
-                {southboundLabel}
-              </button>
-            )}
-          </div>
-        )}
-      </CardHeader>
-      {!isCollapsed && (
-        <CardContent className="space-y-4">
-        {/* Service Alerts */}
-        {alerts.length > 0 && (
-          <div className="space-y-2">
-            {alerts.map((alert) => (
-              <Alert key={alert.id} variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>{alert.headerText}</AlertTitle>
-                {alert.descriptionText && (
-                  <AlertDescription>{alert.descriptionText}</AlertDescription>
-                )}
-              </Alert>
-            ))}
-          </div>
-        )}
-
-        {/* Train Arrivals */}
-        {filteredArrivals.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No trains scheduled at this time
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {displayedArrivals.map((arrival, index) => {
-              const routeColor = getRouteColor(arrival.routeId);
-              const route = routes.find(r => r.routeId === arrival.routeId);
-              const badgeColor = route?.textColor === 'FFFFFF' ? 'white' : 'black';
-              
-              return (
-                <div
-                  key={`${arrival.tripId}-${index}`}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="hud-label">Trajectory</span>
+            <div className="inline-flex flex-wrap border divide-x">
+              {directionOptions.filter(o => o.show).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onDirectionChange(option.value)}
+                  {...stopDragPropagation}
+                  aria-pressed={direction === option.value}
+                  className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                    direction === option.value
+                      ? 'bg-foreground text-background'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Badge
-                      className="text-lg px-3 py-1"
-                      style={{
-                        backgroundColor: `#${routeColor}`,
-                        color: badgeColor,
-                      }}
-                    >
-                      {arrival.routeId}
-                    </Badge>
-                    <div>
-                      <div className="font-semibold">{arrival.destination}</div>
-                      {arrival.trainId && (
-                        <div className="text-sm text-muted-foreground">
-                          Train {arrival.trainId}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold">
-                      {formatArrivalTime(arrival.arrivalTimeSeconds)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {formatTime(arrival.arrivalTime)}
-                    </div>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!isCollapsed && (
+        <div className="px-4 sm:px-6 pb-6 space-y-4">
+          <div className="hud-divider" />
+
+          {/* Service Alerts */}
+          {hasAlerts && (
+            <div className="space-y-2">
+              {alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  role="alert"
+                  className="flex gap-3 border border-caution/40 bg-caution/10 border-l-4 border-l-caution px-3 sm:px-4 py-3"
+                >
+                  <AlertTriangle className="h-4 w-4 text-caution shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="hud-label !text-caution mb-1.5">Mission advisory · Service alert</div>
+                    <div className="text-sm sm:text-base font-medium break-words">{alert.headerText}</div>
+                    {alert.descriptionText && (
+                      <div className="mt-1 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-            
-            {/* Expand/Collapse Button */}
-            {hasMore && (
-              <button
-                type="button"
-                onClick={() => setIsExpanded(!isExpanded)}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
-              >
-                {isExpanded ? (
-                  <>
-                    <ChevronUp className="h-4 w-4" />
-                    Show Less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-4 w-4" />
-                    Show {filteredArrivals.length - INITIAL_TRAINS_TO_SHOW} More
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-      </CardContent>
+              ))}
+            </div>
+          )}
+
+          {/* Train Arrivals */}
+          {filteredArrivals.length === 0 ? (
+            <div className="border border-dashed py-10 text-center">
+              <SatelliteDish className="h-6 w-6 mx-auto text-muted-foreground" />
+              <div className="hud-title text-xl font-semibold mt-3">No telemetry</div>
+              <div className="text-sm text-muted-foreground mt-1">No trains scheduled at this time</div>
+            </div>
+          ) : (
+            <div>
+              <div className="hidden sm:grid grid-cols-[1fr_auto] gap-4 px-4 pb-2">
+                <span className="hud-label">Vehicle · Destination</span>
+                <span className="hud-label text-right">T-minus · ETA</span>
+              </div>
+              <ol className="space-y-2">
+                {displayedArrivals.map((arrival, index) => {
+                  const routeColor = getRouteColor(arrival.routeId);
+                  const route = routes.find(r => r.routeId === arrival.routeId);
+                  const badgeColor = route?.textColor === 'FFFFFF' ? 'white' : 'black';
+                  const secondsLeft = Math.max(0, arrival.arrivalTime - now);
+                  const isArriving = secondsLeft < ARRIVING_THRESHOLD_SECONDS;
+                  const isNext = index === 0;
+
+                  return (
+                    <li
+                      key={`${arrival.tripId}-${index}`}
+                      className={`relative flex items-center justify-between gap-4 border px-3 sm:px-4 py-3 transition-colors hover:bg-muted/40 ${
+                        isNext ? 'border-ignition/50 bg-ignition/[0.06]' : 'bg-background/30'
+                      }`}
+                    >
+                      {isNext && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-ignition" aria-hidden="true" />}
+                      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <span
+                          className="route-bullet h-10 w-10 text-lg shrink-0"
+                          style={{
+                            backgroundColor: `#${routeColor}`,
+                            color: badgeColor,
+                            ['--route-color' as string]: `#${routeColor}`,
+                          }}
+                        >
+                          {arrival.routeId}
+                        </span>
+                        <div className="min-w-0">
+                          {isNext && (
+                            <div className="hud-label !text-ignition mb-1 flex items-center gap-1.5">
+                              <Rocket className="h-3 w-3" /> Next launch window
+                            </div>
+                          )}
+                          <div className="font-semibold truncate">
+                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? '↑' : '↓'} </span>
+                            {arrival.destination}
+                          </div>
+                          {arrival.trainId && (
+                            <div className="font-mono text-[0.7rem] text-muted-foreground mt-0.5 truncate">
+                              VEHICLE ID {arrival.trainId}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {isArriving ? (
+                          <div className="font-mono text-xl sm:text-2xl font-bold text-ignition uppercase tracking-wider flex items-center justify-end gap-2">
+                            <span className="pulse-dot" />
+                            Arriving
+                          </div>
+                        ) : (
+                          <div
+                            className="font-mono text-xl sm:text-2xl font-bold tabular-nums"
+                            aria-label={`Arrives in ${Math.floor(secondsLeft / 60)} minutes`}
+                          >
+                            <span className="text-muted-foreground font-medium text-base mr-1">T−</span>
+                            {formatCountdown(secondsLeft)}
+                          </div>
+                        )}
+                        <div className="font-mono text-xs text-muted-foreground mt-0.5">
+                          ETA {formatTime(arrival.arrivalTime)}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {/* Expand/Collapse Button */}
+              {hasMore && (
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  {...stopDragPropagation}
+                  className="mt-3 w-full py-2 border border-dashed font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors flex items-center justify-center gap-2"
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      Collapse manifest
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      Show {filteredArrivals.length - INITIAL_TRAINS_TO_SHOW} more trains
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
-    </Card>
+    </section>
   );
 }
