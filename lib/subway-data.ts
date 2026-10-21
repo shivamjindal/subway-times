@@ -30,6 +30,10 @@ export function getStation(stopId: string): Station | undefined {
   return stationToRoutes[stopId]?.station;
 }
 
+export function getAllStations(): StationWithRoutes[] {
+  return allStationsWithRoutes;
+}
+
 export function getRoutesForStation(stopId: string): Route[] {
   return stationToRoutes[stopId]?.routes || [];
 }

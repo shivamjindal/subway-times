@@ -8,6 +8,7 @@ import { getRoutesForStation } from '@/lib/subway-data';
 import { AlertCircle, Cloud, CloudRain, Orbit, Radar, Rocket, Satellite, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
+import { OrbitalMapPanel } from './orbital-map/orbital-map-panel';
 import {
   DndContext,
   closestCenter,
@@ -486,6 +487,12 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
           onStationFilterToggle={handleStationFilterToggle}
         />
       </div>
+
+      <OrbitalMapPanel
+        savedStationIds={selectedStationIds}
+        arrivals={data?.arrivals ?? []}
+        onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
+      />
 
       {/* Weather Section */}
       {weatherCardVisible && (

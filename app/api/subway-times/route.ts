@@ -3,50 +3,7 @@ import { transit_realtime } from 'gtfs-realtime-bindings';
 import { parseGTFSFeed, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation, getStation } from '@/lib/subway-data';
 import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
-
-// Map routes to MTA feed groups
-const ROUTE_TO_FEED: Record<string, string> = {
-  'A': 'ace',
-  'C': 'ace',
-  'E': 'ace',
-  'H': 'ace', // Rockaway Park Shuttle (connects with A line)
-  'B': 'bdfm',
-  'D': 'bdfm',
-  'F': 'bdfm',
-  'FX': 'bdfm', // F Express
-  'FS': 'bdfm', // Franklin Avenue Shuttle (connects with F line)
-  'M': 'bdfm',
-  'G': 'g',
-  'GS': '1234567', // 42 St Shuttle (connects Grand Central and Times Square)
-  'J': 'jz',
-  'Z': 'jz',
-  'N': 'nqrw',
-  'Q': 'nqrw',
-  'R': 'nqrw',
-  'W': 'nqrw',
-  'L': 'l',
-  '1': '1234567',
-  '2': '1234567',
-  '3': '1234567',
-  '4': '1234567',
-  '5': '1234567',
-  '6': '1234567',
-  '6X': '1234567', // 6 Express
-  '7': '1234567',
-  '7X': '1234567', // 7 Express
-  'SI': 'si',
-};
-
-const FEED_URLS: Record<string, string> = {
-  'ace': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace',
-  'bdfm': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm',
-  'g': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g',
-  'jz': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-jz',
-  'nqrw': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw',
-  'l': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l',
-  '1234567': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs',
-  'si': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si',
-};
+import { FEED_URLS, ROUTE_TO_FEED, getMtaHeaders } from '@/lib/mta-feeds';
 
 const ALERTS_FEED_URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts';
 
@@ -192,10 +149,7 @@ export async function GET(request: Request) {
     const allTargetStopIds = Array.from(new Set(stationConfigs.flatMap((config) => config.stopIds)));
     const stationRouteIds = Array.from(stationRoutes);
 
-    const headers: HeadersInit = {};
-    if (process.env.MTA_API_KEY) {
-      headers['x-api-key'] = process.env.MTA_API_KEY;
-    }
+    const headers = getMtaHeaders();
 
     // Fetch all needed feeds in parallel
     const feedPromises = Array.from(neededFeeds).map(async (feedKey) => {
