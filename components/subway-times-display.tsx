@@ -8,6 +8,7 @@ import { getRoutesForStation } from '@/lib/subway-data';
 import { AlertCircle, Cloud, CloudRain, Orbit, Radar, Rocket, Satellite, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
+import { TelemetryBar } from './telemetry-bar';
 import {
   DndContext,
   closestCenter,
@@ -623,6 +624,14 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
           <span className="text-border">|</span>
           <span>{refreshing ? <span className="text-telemetry">Syncing…</span> : 'Auto-sync 30s'}</span>
         </div>
+      )}
+
+      {stationConfigs.length > 0 && (
+        <TelemetryBar
+          stations={stationConfigs}
+          arrivalsByStation={arrivalsByStation}
+          alertsByStation={alertsByStation}
+        />
       )}
     </div>
   );
