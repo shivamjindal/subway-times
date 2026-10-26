@@ -113,6 +113,8 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
             if (e.key === 'Enter') {
               e.preventDefault();
               e.stopPropagation();
+              const target = searchResults.find(r => !selectedStations.includes(r.station.stopId));
+              if (target) handleSelectStation(target.station.stopId, e);
             }
           }}
           onFocus={() => setShowSuggestions(true)}
