@@ -110,9 +110,11 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
             setShowSuggestions(true);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
               e.preventDefault();
               e.stopPropagation();
+              const target = searchResults.find(r => !selectedStations.includes(r.station.stopId));
+              if (target) handleSelectStation(target.station.stopId, e);
             }
           }}
           onFocus={() => setShowSuggestions(true)}
