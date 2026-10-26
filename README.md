@@ -10,7 +10,7 @@ Minimal Next.js app for real-time NYC subway arrivals, service alerts, and a wea
 - Filter arrivals by direction and route
 - Reorder station chips/cards with drag-and-drop
 - Show NYC weather (toggleable in settings)
-- Orbital map: optional 3D view of every line, station, and estimated train positions
+- Space network: a live 3D view where every train is a rocket launching, flying, and landing between spaceports
 - Persist selected stations and weather-card visibility in `localStorage`
 
 ## Stack
@@ -21,7 +21,7 @@ Minimal Next.js app for real-time NYC subway arrivals, service alerts, and a wea
 - dnd-kit
 - gtfs-realtime-bindings
 - next-themes
-- three.js via @react-three/fiber, drei, postprocessing (orbital map only, lazy-loaded)
+- three.js via @react-three/fiber, drei, postprocessing (space network only, lazy-loaded)
 
 ## Local development
 
@@ -74,7 +74,7 @@ Returns:
 ### `GET /api/train-positions`
 
 Fetches every MTA trip-update feed and returns an estimated position for each active train:
-- `trains`: `{ id, routeId, direction, from, to, departedAt, arrivesAt, basis }`
+- `trains`: `{ id, routeId, direction, from, to, departedAt, arrivesAt, departsAt, next?, nextArrivesAt?, basis }`
 - `failedFeeds`: number of feeds that failed (the rest are still returned)
 - `lastUpdated`
 
@@ -82,17 +82,34 @@ GTFS-Realtime has no train coordinates, so each train is placed on the segment b
 last left (`from`) and its next predicted stop (`to`). `basis` says how the segment start was found:
 `feed` (the feed still lists the departed stop), `schedule` (backed out of scheduled run time), or
 `stopped` (the feed reports the train stopped at a station, or it is waiting at its origin terminal).
+`departsAt` is when the train leaves `to` again (at least a 20 s dwell, since feeds usually report
+departure equal to arrival), and `next`/`nextArrivesAt` describe the following stop when the feed lists one.
 
-## Orbital map
+## Space network
 
-A collapsible panel below the station search. Nothing 3D is downloaded until it is opened; the
-open/closed state is remembered in `localStorage`.
+The top of the page is a live 3D view of the whole subway, re-skinned as a network of spaceports.
+Each train is a rocket: it sits on the pad while dwelling, launches at its departure time, flies a
+ballistic arc to the next station, and lands at its predicted arrival. Nothing 3D is downloaded until
+the panel renders; collapsing it is remembered in `localStorage`.
 
-- Clicking a station node flies the camera to it; untracked stations can be added with **Track station**.
-- Tracked stations get beacons and labels; the sidebar lists them as keyboard-accessible buttons.
-- `prefers-reduced-motion` disables camera flights and pulsing and steps train positions every 5s.
-- No WebGL, a lost graphics context, or a render error shows a fallback; arrivals never depend on the map.
-  Low-power devices (≤4 cores, ≤4 GB memory, or Save-Data) skip bloom and render at 1x DPR.
+- Every rocket's state is pure time math on its trip estimate (`components/orbital-map/rocket-timeline.ts`),
+  so nothing is simulated per frame and a rocket entering view is already in the right place.
+- In the full view, every rocket is one instanced draw (body, short trail); launches and landings fire a
+  brief flare and ring from the event times. A ticker shows rockets in flight, landing, on pad, and the next
+  launch (at a tracked spaceport when there is one).
+- When zoomed, rockets, trails, and flares are culled against the camera frustum with a padded margin,
+  recomputed on camera move (throttled to 150 ms, otherwise once a second). The nearest few rockets get a
+  procedural booster model with grid fins, legs, and a landing/ascent plume.
+- Clicking a spaceport or a rocket opens a close-up (lazy-loaded separately) re-creating the landing and launch:
+  descent with grid fins, landing burn, legs, touchdown dust, venting on the pad, ignition, liftoff, and climb-out
+  toward the next stop. Live mode follows the next real landing and launch with T−minus readouts; Replay plays the
+  sequence on demand, optionally on a loop. The map pauses rendering while the close-up is open.
+- `prefers-reduced-motion` disables camera flights and flares, steps rockets every 5 s, and shows the close-up as a
+  still hero frame next to the live text manifest.
+- No WebGL, a lost graphics context, or a render error shows a fallback; the ticker, manifests, and arrivals keep
+  working. Low-power devices (≤4 cores, ≤4 GB memory, or Save-Data) skip bloom and trails, render at 1x DPR,
+  and use fewer detail boosters and particles.
+- Append `?perf=1` to show a frame-rate overlay with visible/total rocket counts.
 
 ## Useful scripts
 

@@ -135,7 +135,11 @@ export function SpaceportCloseup({
           {showScene && (
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-background/90 to-transparent px-4 pb-8 pt-3">
               <div role="status" aria-live="polite" className="font-mono text-xs uppercase tracking-[0.18em]">
-                <span className={mode === 'replay' ? 'text-caution' : 'text-nominal'}>{mode === 'replay' ? 'Replay' : 'Live'}</span>
+                {reducedMotion ? (
+                  <span className="text-muted-foreground">Still frame</span>
+                ) : (
+                  <span className={mode === 'replay' ? 'text-caution' : 'text-nominal'}>{mode === 'replay' ? 'Replay' : 'Live'}</span>
+                )}
                 <span className="text-muted-foreground"> · </span>
                 <span className="text-telemetry" data-testid="pad-phase">{PHASE_LABELS[phase]}</span>
               </div>
@@ -174,7 +178,7 @@ export function SpaceportCloseup({
             ))}
           </div>
 
-          {showScene && (
+          {showScene && !reducedMotion && (
             <div className="mt-4 flex flex-wrap gap-2">
               <ControlButton pressed={mode === 'live'} onClick={() => setMode('live')}>
                 <span className="pulse-dot" /> Live

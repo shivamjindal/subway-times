@@ -36,7 +36,9 @@ export interface SpaceportCloseupSceneProps {
   perf: boolean;
 }
 
-const BOOSTER_SCALE = 6;
+const BOOSTER_SCALE = 8;
+/** How far deployed legs reach below the engine bell, in booster-local units. */
+const LEG_REACH = 0.16;
 const PLAN_REFRESH_SECONDS = 0.5;
 /** Reduced-motion hero frame: 1.6 s before touchdown, landing burn lit, legs unfolding. */
 const HERO_SECONDS_TO_TOUCHDOWN = 1.6;
@@ -46,7 +48,11 @@ const tmpObject = new THREE.Object3D();
 const tmpColor = new THREE.Color();
 const tmpDir = new THREE.Vector3();
 
-const smooth = (edge0: number, edge1: number, x: number) => THREE.MathUtils.smoothstep(x, edge0, edge1);
+/** GLSL-style smoothstep; unlike THREE.MathUtils.smoothstep it accepts edge0 > edge1 for falling ramps. */
+const smooth = (edge0: number, edge1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+};
 
 interface PadPose {
   phase: PadPhase;
@@ -262,7 +268,7 @@ function PadScene({
     const holder = boosterHolder.current;
     if (holder && booster.current) {
       holder.visible = pose.visible;
-      holder.position.set(pose.x, pose.y + 0.3, pose.z);
+      holder.position.set(pose.x, pose.y + 0.3 + pose.legs * LEG_REACH * BOOSTER_SCALE, pose.z);
       const axis = tmpDir.set(pose.heading[0] * Math.sin(pose.lean), Math.cos(pose.lean), pose.heading[1] * Math.sin(pose.lean)).normalize();
       holder.quaternion.setFromUnitVectors(UP, axis);
       const flicker = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 47) * 0.6 + Math.sin(clock.elapsedTime * 23) * 0.4;
@@ -275,8 +281,8 @@ function PadScene({
     }
     if (groundGlow.current) {
       groundGlow.current.visible = glow > 0.02;
-      groundGlow.current.scale.setScalar(4 + glow * 6);
-      (groundGlow.current.material as THREE.MeshBasicMaterial).opacity = Math.min(0.85, glow * 0.7);
+      groundGlow.current.scale.setScalar(3 + glow * 2.5);
+      (groundGlow.current.material as THREE.MeshBasicMaterial).opacity = Math.min(0.55, glow * 0.35);
     }
 
     if (perf) {
@@ -325,7 +331,7 @@ function PadScene({
             const a = hash(i, 1) * Math.PI * 2;
             const r = (3 + hash(i, 2) * 6) * (1 - Math.exp(-age * 1.6));
             const fade = (1 - age / 4) * (1 - age / 4);
-            setParticle(mesh, i, Math.cos(a) * r, 0.4 + age * (0.3 + hash(i, 3) * 0.5), Math.sin(a) * r, 0.5 + age * 0.9, base, 0.35 * fade);
+            setParticle(mesh, i, Math.cos(a) * r, 0.4 + age * (0.3 + hash(i, 3) * 0.5), Math.sin(a) * r, 0.5 + age * 0.9, base, 0.16 * fade);
           }
           finish(mesh);
         }}
@@ -333,7 +339,7 @@ function PadScene({
       {/* Ignition and liftoff exhaust billowing along the ground. */}
       <Particles
         count={smokeCount}
-        color="#ffd9b0"
+        color="#c9b8a4"
         write={(mesh, base) => {
           const window = IGNITION_LEAD_SECONDS + 5;
           for (let i = 0; i < smokeCount; i++) {
@@ -343,9 +349,9 @@ function PadScene({
               continue;
             }
             const a = hash(i, 4) * Math.PI * 2;
-            const r = (2 + hash(i, 5) * 10) * (1 - Math.exp(-age * 1.2));
+            const r = (2 + hash(i, 5) * 8) * (1 - Math.exp(-age * 1.2));
             const fade = Math.min(1, age * 3) * (1 - age / 5);
-            setParticle(mesh, i, Math.cos(a) * r, 0.5 + age * (0.4 + hash(i, 6)), Math.sin(a) * r, 0.8 + age * 1.3, base, 0.28 * fade);
+            setParticle(mesh, i, Math.cos(a) * r, 0.5 + age * (0.4 + hash(i, 6)), Math.sin(a) * r, 0.7 + age * 0.8, base, 0.055 * fade);
           }
           finish(mesh);
         }}
@@ -448,7 +454,7 @@ export default function SpaceportCloseupScene(props: SpaceportCloseupSceneProps)
       dpr={lowPower ? 1 : [1, 1.75]}
       frameloop={reducedMotion ? 'demand' : 'always'}
       gl={{ antialias: !lowPower, powerPreference: lowPower ? 'low-power' : 'high-performance' }}
-      camera={{ fov: 40, near: 0.5, far: 400, position: [14, 7, 26] }}
+      camera={{ fov: 40, near: 0.5, far: 400, position: [20, 9, 36] }}
       onCreated={({ gl }) => {
         gl.domElement.addEventListener('webglcontextlost', (event) => {
           event.preventDefault();
@@ -459,7 +465,7 @@ export default function SpaceportCloseupScene(props: SpaceportCloseupSceneProps)
       <PadScene {...props} />
       <OrbitControls
         makeDefault
-        target={[0, 8, 0]}
+        target={[0, 9, 0]}
         enablePan={false}
         minDistance={14}
         maxDistance={55}
