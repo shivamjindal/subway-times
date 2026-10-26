@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Grid, OrbitControls } from '@react-three/drei';
 import { Bloom, EffectComposer } from '@react-three/postprocessing';
@@ -417,22 +417,21 @@ function Stars() {
 function Skyline() {
   const ref = useRef<THREE.InstancedMesh>(null);
   const count = 70;
-  useMemo(() => {
-    queueMicrotask(() => {
-      const mesh = ref.current;
-      if (!mesh) return;
-      for (let i = 0; i < count; i++) {
-        const a = -2.4 + (i / count) * 2.2 + hash(i, 13) * 0.04;
-        const r = 70 + hash(i, 14) * 25;
-        const h = 6 + Math.pow(hash(i, 15), 2.5) * 38;
-        tmpObject.position.set(Math.cos(a) * r, h / 2, Math.sin(a) * r);
-        tmpObject.scale.set(3 + hash(i, 16) * 4, h, 3 + hash(i, 17) * 4);
-        tmpObject.rotation.set(0, -a, 0);
-        tmpObject.updateMatrix();
-        mesh.setMatrixAt(i, tmpObject.matrix);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-    });
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    for (let i = 0; i < count; i++) {
+      const a = -2.4 + (i / count) * 2.2 + hash(i, 13) * 0.04;
+      const r = 70 + hash(i, 14) * 25;
+      const h = 6 + Math.pow(hash(i, 15), 2.5) * 38;
+      tmpObject.position.set(Math.cos(a) * r, h / 2, Math.sin(a) * r);
+      tmpObject.scale.set(3 + hash(i, 16) * 4, h, 3 + hash(i, 17) * 4);
+      tmpObject.rotation.set(0, -a, 0);
+      tmpObject.updateMatrix();
+      mesh.setMatrixAt(i, tmpObject.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
   }, []);
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, count]}>

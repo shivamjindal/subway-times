@@ -3,10 +3,12 @@
 import { Component, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
-import { ChevronDown, Crosshair, LocateFixed, Orbit, Plus, Radar, Satellite, X } from 'lucide-react';
+import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
 import { getRouteColor, getRoutesForStation, getStation } from '@/lib/subway-data';
 import { formatArrivalTime, type TrainArrival } from '@/lib/subway-parser';
 import type { EstimatedTrain } from '@/lib/train-positions';
+import { formatTMinus, summarizeNetwork } from './rocket-timeline';
+import { SpaceportCloseup } from './spaceport-closeup';
 
 const OrbitalMapScene = dynamic(() => import('./orbital-map-scene'), {
   ssr: false,
@@ -53,10 +55,14 @@ const noopSubscribe = () => () => {};
 
 function readStoredOpen() {
   try {
-    return localStorage.getItem(OPEN_STORAGE_KEY) === 'true';
+    return localStorage.getItem(OPEN_STORAGE_KEY) !== 'false';
   } catch {
-    return false;
+    return true;
   }
+}
+
+function readPerfFlag() {
+  return new URLSearchParams(window.location.search).get('perf') === '1';
 }
 
 function subscribeReducedMotion(callback: () => void) {
@@ -156,7 +162,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === 'light' ? 'light' : 'dark';
 
-  const storedOpen = useSyncExternalStore(noopSubscribe, readStoredOpen, () => false);
+  const storedOpen = useSyncExternalStore(noopSubscribe, readStoredOpen, () => true);
+  const perf = useSyncExternalStore(noopSubscribe, readPerfFlag, () => false);
+  const [closeupStationId, setCloseupStationId] = useState<string | null>(null);
   const open = openOverride ?? storedOpen;
 
   const toggleOpen = () => {
@@ -169,7 +177,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
   };
 
   const canRender = open && capability?.webgl === true && !contextLost;
-  const telemetry = useTrainTelemetry(canRender);
+  const telemetry = useTrainTelemetry(open && capability !== null);
 
   const selectStation = useCallback((stationId: string | null) => {
     setSelectedStationId(stationId);
@@ -177,6 +185,14 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
   }, []);
 
   const handleContextLost = useCallback(() => setContextLost(true), []);
+
+  const enterSpaceport = useCallback((stationId: string) => {
+    setSelectedStationId(stationId);
+    setFocusNonce((n) => n + 1);
+    setCloseupStationId(stationId);
+  }, []);
+
+  const selectRocket = useCallback((_train: EstimatedTrain, stationId: string) => enterSpaceport(stationId), [enterSpaceport]);
 
   const retryScene = () => {
     setContextLost(false);
@@ -188,8 +204,10 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
       <div className="flex h-12 w-12 items-center justify-center border border-caution/50">
         <Satellite className="h-5 w-5 text-caution" />
       </div>
-      <div className="hud-label !text-caution">3D map unavailable</div>
-      <p className="max-w-sm text-sm text-muted-foreground">{detail} Arrivals and tracked stations keep working as normal.</p>
+      <div className="hud-label !text-caution">3D network unavailable</div>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        {detail} The live ticker, spaceport manifests, and arrivals keep working as normal.
+      </p>
       {retry && (
         <button type="button" onClick={retry} className="border px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] hover:border-telemetry hover:text-telemetry">
           Retry renderer
@@ -214,7 +232,10 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
           savedStationIds={savedStationIds}
           selectedStationId={selectedStationId}
           focusNonce={focusNonce}
-          onSelectStation={selectStation}
+          onSelectStation={enterSpaceport}
+          onSelectRocket={selectRocket}
+          paused={closeupStationId !== null}
+          perf={perf}
           reducedMotion={reducedMotion}
           lowPower={capability.lowPower}
           theme={theme}
@@ -228,8 +249,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
     <section className="hud-panel mb-6" aria-labelledby="orbital-map-title">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2 sm:px-6">
         <h2 id="orbital-map-title" className="hud-label flex items-center gap-2">
-          <Orbit className="h-3 w-3 text-telemetry" />
-          Orbital map · NYC subway
+          <Rocket className="h-3 w-3 text-ignition" />
+          Space network · Live
         </h2>
         <button
           type="button"
@@ -238,28 +259,29 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
           aria-controls="orbital-map-body"
           className="flex items-center gap-1.5 font-mono text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-telemetry"
         >
-          {open ? 'Collapse' : 'Open map'}
+          {open ? 'Collapse' : 'Open network'}
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
       {open && (
         <div id="orbital-map-body" className="grid lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="relative h-[360px] overflow-hidden sm:h-[480px]">
+          <div className="relative h-[420px] overflow-hidden sm:h-[560px]">
             <div
               className="absolute inset-0"
               {...(canRender && {
                 role: 'img',
-                'aria-label': `3D map of NYC subway lines and stations with ${telemetry.trains.length} estimated train positions. Use the station list beside the map to navigate by keyboard.`,
+                'aria-label': `3D network of NYC subway spaceports with ${telemetry.trains.length} rockets flying between them, one per train. Use the ticker and station list beside the map to navigate by keyboard.`,
               })}
             >
               {sceneContent}
             </div>
+            <NetworkTicker trains={telemetry.trains} clockOffset={telemetry.clockOffset} status={telemetry.status} />
             {canRender && (
               <>
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-background/90 to-transparent px-4 pb-3 pt-8">
                   <p className="font-mono text-[0.65rem] uppercase leading-relaxed tracking-[0.14em] text-muted-foreground">
-                    <span className="text-caution">Est. positions</span> · interpolated between stations from MTA arrival predictions — not GPS
+                    <span className="text-caution">Est. positions</span> · each rocket is a train, flown between stations from MTA arrival predictions — not GPS
                   </p>
                 </div>
                 <button
@@ -280,12 +302,13 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
               arrivals={arrivals}
               onTrack={onTrackStation}
               onClear={() => selectStation(null)}
+              onEnter={enterSpaceport}
             />
 
             <div>
-              <div className="hud-label mb-2">Tracked stations</div>
+              <div className="hud-label mb-2">Tracked spaceports</div>
               {savedStationIds.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Track a station to pin a beacon on the map.</p>
+                <p className="text-xs text-muted-foreground">Track a spaceport to pin a beacon on the network.</p>
               ) : (
                 <ul className="flex flex-wrap gap-1.5">
                   {savedStationIds.map((id) => (
@@ -317,22 +340,38 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
               </ul>
             </div>
 
-            {canRender && <div className="hud-divider" />}
-            {canRender && (
+            <div className="hud-divider" />
+            {capability && (
               <div role="status" aria-live="polite" className="flex items-start gap-2 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
                 <span className={telemetry.status === 'ok' ? 'text-nominal' : telemetry.status === 'error' ? 'text-caution' : 'text-telemetry'}>
                   <span className="pulse-dot" />
                 </span>
                 <span>
-                  {telemetry.status === 'loading' && 'Acquiring train telemetry…'}
-                  {telemetry.status === 'error' && 'Train telemetry unavailable · lines and stations only'}
+                  {telemetry.status === 'loading' && 'Acquiring rocket telemetry…'}
+                  {telemetry.status === 'error' && 'Rocket telemetry unavailable · spaceports only'}
                   {telemetry.status === 'ok' &&
-                    `${telemetry.trains.length} trains plotted (estimated)${telemetry.failedFeeds > 0 ? ` · ${telemetry.failedFeeds} feed${telemetry.failedFeeds > 1 ? 's' : ''} offline` : ''}`}
+                    `${telemetry.trains.length} rockets tracked (estimated)${telemetry.failedFeeds > 0 ? ` · ${telemetry.failedFeeds} feed${telemetry.failedFeeds > 1 ? 's' : ''} offline` : ''}`}
                 </span>
               </div>
             )}
           </aside>
         </div>
+      )}
+
+      {closeupStationId && (
+        <SpaceportCloseup
+          key={closeupStationId}
+          stationId={closeupStationId}
+          trains={telemetry.trains}
+          clockOffset={telemetry.clockOffset}
+          webgl={capability?.webgl === true}
+          lowPower={capability?.lowPower ?? true}
+          reducedMotion={reducedMotion}
+          perf={perf}
+          isTracked={savedStationIds.includes(closeupStationId)}
+          onTrack={onTrackStation}
+          onClose={() => setCloseupStationId(null)}
+        />
       )}
     </section>
   );
@@ -344,12 +383,14 @@ function SelectedStationReadout({
   arrivals,
   onTrack,
   onClear,
+  onEnter,
 }: {
   stationId: string | null;
   isSaved: boolean;
   arrivals: TrainArrival[];
   onTrack: (stationId: string) => void;
   onClear: () => void;
+  onEnter: (stationId: string) => void;
 }) {
   const now = useNowSeconds();
 
@@ -359,7 +400,7 @@ function SelectedStationReadout({
         <div className="hud-label mb-2 flex items-center gap-2">
           <Crosshair className="h-3 w-3 text-telemetry" /> No target selected
         </div>
-        <p className="text-xs text-muted-foreground">Click a station node to fly to it, or pick a tracked station below.</p>
+        <p className="text-xs text-muted-foreground">Click a spaceport or a rocket to watch its landings and launches up close, or pick a tracked spaceport below.</p>
       </div>
     );
   }
@@ -379,6 +420,13 @@ function SelectedStationReadout({
         </button>
       </div>
       <h3 className="hud-title mt-2 text-2xl font-bold">{station?.name ?? stationId}</h3>
+      <button
+        type="button"
+        onClick={() => onEnter(stationId)}
+        className="mt-3 flex items-center gap-1.5 border border-telemetry/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-telemetry transition-colors hover:bg-telemetry/10"
+      >
+        <DoorOpen className="h-3.5 w-3.5" /> Enter spaceport
+      </button>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {routes.map((route) => (
           <span
@@ -419,7 +467,7 @@ function SelectedStationReadout({
           onClick={() => onTrack(stationId)}
           className="mt-3 flex items-center gap-1.5 border border-ignition/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-ignition transition-colors hover:bg-ignition/10"
         >
-          <Plus className="h-3.5 w-3.5" /> Track station
+          <Plus className="h-3.5 w-3.5" /> Track spaceport
         </button>
       )}
     </div>
@@ -433,6 +481,45 @@ function useNowSeconds() {
     return () => clearInterval(interval);
   }, []);
   return now;
+}
+
+function NetworkTicker({
+  trains,
+  clockOffset,
+  status,
+}: {
+  trains: EstimatedTrain[];
+  clockOffset: number;
+  status: TrainTelemetry['status'];
+}) {
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now() / 1000), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (status !== 'ok' || trains.length === 0) return null;
+  const summary = summarizeNetwork(trains, now + clockOffset);
+  const next = summary.nextLaunch;
+  return (
+    <div
+      data-testid="network-ticker"
+      className="pointer-events-none absolute left-3 top-3 max-w-[calc(100%-7rem)] border bg-card/85 px-3 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.14em] tabular-nums backdrop-blur-sm"
+    >
+      <span className="text-telemetry">{summary.inFlight}</span> in flight
+      <span className="text-muted-foreground"> · </span>
+      <span className="text-ignition">{summary.landing}</span> landing
+      <span className="text-muted-foreground"> · </span>
+      <span>{summary.onPad}</span> on pad
+      {next && (
+        <span className="block sm:inline">
+          <span className="hidden text-muted-foreground sm:inline"> · </span>
+          next launch <span className="text-nominal">{formatTMinus(next.time - now - clockOffset)}</span> at{' '}
+          {getStation(next.station)?.name ?? next.station}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function SceneStatus({ label, detail }: { label: string; detail: string }) {
