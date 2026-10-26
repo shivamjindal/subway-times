@@ -5,9 +5,9 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { CameraControls, Grid, Line, PerformanceMonitor } from '@react-three/drei';
 import { Bloom, EffectComposer } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { getRouteColor } from '@/lib/subway-data';
 import type { EstimatedTrain } from '@/lib/train-positions';
-import { MAP_STATIONS, ROUTE_LINES, getMapStation, placeTrains, pointOnTrack, project, trainProgress, type MapStation } from './map-geometry';
+import { MAP_STATIONS, ROUTE_LINES, getMapStation, project, type MapStation } from './map-geometry';
+import { RocketNetwork, type NetworkStats } from './rocket-network';
 
 export interface OrbitalMapSceneProps {
   trains: EstimatedTrain[];
@@ -18,6 +18,11 @@ export interface OrbitalMapSceneProps {
   /** Bumped to re-fly to the current selection (or the overview when nothing is selected). */
   focusNonce: number;
   onSelectStation: (stationId: string) => void;
+  onSelectRocket: (train: EstimatedTrain, stationId: string) => void;
+  /** Stops rendering entirely (e.g. while the spaceport close-up is open). */
+  paused: boolean;
+  /** Shows an FPS / rocket-count readout and mirrors it to window.__spaceNetworkPerf. */
+  perf: boolean;
   reducedMotion: boolean;
   lowPower: boolean;
   theme: 'dark' | 'light';
@@ -42,7 +47,6 @@ const PALETTES: Record<'dark' | 'light', Palette> = {
 const [CENTER_X, CENTER_Z] = project(40.725, -73.915);
 const OVERVIEW_OFFSET: [number, number, number] = [0, 27, 17];
 const FOCUS_OFFSET: [number, number, number] = [2.2, 4.2, 3.4];
-const MAX_TRAINS = 2000;
 const REDUCED_MOTION_TICK_MS = 5000;
 
 const tmp = new THREE.Object3D();
@@ -160,7 +164,7 @@ function Stations({ palette, savedSet, onSelectStation, onHoverStation }: Statio
   return (
     <>
       <instancedMesh ref={visualRef} args={[undefined, undefined, MAP_STATIONS.length]} renderOrder={2}>
-        <octahedronGeometry args={[0.045, 0]} />
+        <cylinderGeometry args={[0.05, 0.058, 0.014, 6]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
       <instancedMesh
@@ -253,41 +257,24 @@ function SelectedMarker({ stationId, palette, reducedMotion }: { stationId: stri
   );
 }
 
-function Trains({ trains, clockOffset, glow }: { trains: EstimatedTrain[]; clockOffset: number; glow: number }) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  const placed = useMemo(() => placeTrains(trains).slice(0, MAX_TRAINS), [trains]);
-
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    placed.forEach(({ train }, i) => {
-      mesh.setColorAt(i, tmpColor.set(`#${getRouteColor(train.routeId)}`).multiplyScalar(glow * 1.3));
-    });
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    mesh.count = placed.length;
-  }, [placed, glow]);
-
-  useFrame(({ camera }) => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    const now = Date.now() / 1000 + clockOffset;
-    const scale = markerScale(camera.position.y) * 0.8;
-    placed.forEach(({ train, track }, i) => {
-      const [x, z] = pointOnTrack(track, trainProgress(train, now));
-      tmp.position.set(x, 0.09, z);
-      tmp.scale.setScalar(scale);
-      tmp.updateMatrix();
-      mesh.setMatrixAt(i, tmp.matrix);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
+/** Opt-in frame-rate probe for measuring the live network; writes straight to the DOM, no React state. */
+function PerfProbe({ stats, output }: { stats: NetworkStats; output: React.RefObject<HTMLDivElement | null> }) {
+  const sample = useRef({ frames: 0, since: 0, fps: 0 });
+  useFrame(({ clock }) => {
+    const s = sample.current;
+    s.frames++;
+    const t = clock.elapsedTime;
+    if (t - s.since < 1) return;
+    s.fps = s.frames / (t - s.since);
+    s.frames = 0;
+    s.since = t;
+    const snapshot = { fps: Math.round(s.fps), ...stats };
+    (window as unknown as { __spaceNetworkPerf?: typeof snapshot }).__spaceNetworkPerf = snapshot;
+    if (output.current) {
+      output.current.textContent = `${snapshot.fps} FPS · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares`;
+    }
   });
-
-  return (
-    <instancedMesh ref={ref} args={[undefined, undefined, MAX_TRAINS]} renderOrder={4} frustumCulled={false}>
-      <sphereGeometry args={[0.05, 10, 8]} />
-      <meshBasicMaterial toneMapped={false} />
-    </instancedMesh>
-  );
+  return null;
 }
 
 function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedStationId: string | null; focusNonce: number; reducedMotion: boolean }) {
@@ -338,11 +325,16 @@ export default function OrbitalMapScene({
   selectedStationId,
   focusNonce,
   onSelectStation,
+  onSelectRocket,
+  paused,
+  perf,
   reducedMotion,
   lowPower,
   theme,
   onContextLost,
 }: OrbitalMapSceneProps) {
+  const [stats] = useState<NetworkStats>(() => ({ total: 0, visible: 0, detailed: 0, flares: 0 }));
+  const perfOutput = useRef<HTMLDivElement>(null);
   const palette = PALETTES[theme];
   const [performanceOk, setPerformanceOk] = useState(true);
   const [hovered, setHovered] = useState<MapStation | null>(null);
@@ -375,7 +367,7 @@ export default function OrbitalMapScene({
     <div className="relative h-full w-full">
       <Canvas
         dpr={lowPower ? 1 : [1, 2]}
-        frameloop={reducedMotion ? 'demand' : 'always'}
+        frameloop={paused ? 'never' : reducedMotion ? 'demand' : 'always'}
         gl={{ antialias: !lowPower, powerPreference: lowPower ? 'low-power' : 'high-performance' }}
         camera={{ fov: 42, near: 0.05, far: 400, position: [CENTER_X, OVERVIEW_OFFSET[1], CENTER_Z + OVERVIEW_OFFSET[2]] }}
         onCreated={({ gl }) => {
@@ -407,7 +399,19 @@ export default function OrbitalMapScene({
         <RouteLines palette={palette} additive={theme === 'dark'} />
         <Stations palette={palette} savedSet={savedSet} onSelectStation={onSelectStation} onHoverStation={setHovered} />
         {selectedStationId && <SelectedMarker stationId={selectedStationId} palette={palette} reducedMotion={reducedMotion} />}
-        <Trains trains={trains} clockOffset={clockOffset} glow={palette.glow} />
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[CENTER_X + 10, 20, CENTER_Z + 6]} intensity={1.6} />
+        <RocketNetwork
+          trains={trains}
+          clockOffset={clockOffset}
+          glow={palette.glow}
+          lowPower={lowPower}
+          reducedMotion={reducedMotion}
+          markerScale={markerScale}
+          onSelectRocket={onSelectRocket}
+          stats={stats}
+        />
+        {perf && <PerfProbe stats={stats} output={perfOutput} />}
         <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} />
         <LabelProjector labels={labels} elements={labelElements} />
 
@@ -418,6 +422,9 @@ export default function OrbitalMapScene({
         )}
       </Canvas>
 
+      {perf && (
+        <div ref={perfOutput} className="pointer-events-none absolute left-3 top-3 border bg-popover/85 px-2 py-1 font-mono text-[0.65rem] tabular-nums text-nominal" />
+      )}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         {labels.map(({ key, station, tone }) => (
           <div

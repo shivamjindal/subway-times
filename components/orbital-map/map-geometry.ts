@@ -1,6 +1,7 @@
 import geometryData from '@/lib/subway-map-geometry.json';
 import { getAllStations, getRouteColor } from '@/lib/subway-data';
 import type { EstimatedTrain } from '@/lib/train-positions';
+import { rocketState } from './rocket-timeline';
 
 interface MapGeometry {
   origin: [number, number];
@@ -80,24 +81,91 @@ function segmentPath(from: MapStation, to: MapStation): Track {
   return { xs, zs, lengths };
 }
 
-export interface PlacedTrain {
+export interface PlacedRocket {
   train: EstimatedTrain;
-  track: Track;
+  /** Ground tracks for leg 0 (from→to) and leg 1 (to→next). */
+  legs: [Track | null, Track | null];
+  /** Apex height of each leg's arc, in scene units. */
+  apex: [number, number];
 }
 
-export function placeTrains(trains: EstimatedTrain[]): PlacedTrain[] {
+function trackBetween(fromId: string, toId: string | undefined): Track | null {
+  if (!toId || fromId === toId) return null;
+  const from = stationById.get(fromId);
+  const to = stationById.get(toId);
+  return from && to ? segmentPath(from, to) : null;
+}
+
+const apexFor = (track: Track | null) =>
+  track ? Math.min(0.9, Math.max(0.18, track.lengths[track.lengths.length - 1] * 0.35)) : 0;
+
+export function placeRockets(trains: EstimatedTrain[]): PlacedRocket[] {
   return trains.flatMap((train) => {
-    const from = stationById.get(train.from);
-    const to = stationById.get(train.to);
-    if (!from || !to) return [];
-    return [{ train, track: segmentPath(from, to) }];
+    if (!stationById.has(train.to)) return [];
+    const legs: [Track | null, Track | null] = [trackBetween(train.from, train.to), trackBetween(train.to, train.next)];
+    return [{ train, legs, apex: [apexFor(legs[0]), apexFor(legs[1])] }];
   });
 }
 
-export function trainProgress(train: EstimatedTrain, nowSeconds: number): number {
-  const span = train.arrivesAt - train.departedAt;
-  if (span <= 0) return 1;
-  return Math.min(1, Math.max(0, (nowSeconds - train.departedAt) / span));
+export interface RocketPose {
+  x: number;
+  y: number;
+  z: number;
+  /** Unit heading; (0, 1, 0) when standing on a pad. */
+  dx: number;
+  dy: number;
+  dz: number;
+  flying: boolean;
+  progress: number;
+  station: string;
+  secondsToTouchdown: number;
+}
+
+export function createPose(): RocketPose {
+  return { x: 0, y: 0, z: 0, dx: 0, dy: 1, dz: 0, flying: false, progress: 0, station: '', secondsToTouchdown: Infinity };
+}
+
+/** Writes the rocket's ballistic-arc position and heading at `now` into `out`. `progressLag` samples a point behind it (trails). */
+export function rocketPose(rocket: PlacedRocket, now: number, out: RocketPose, progressLag = 0): RocketPose {
+  const state = rocketState(rocket.train, now);
+  const track = rocket.legs[state.leg];
+  out.station = state.station;
+  out.secondsToTouchdown = state.secondsToTouchdown;
+  if (state.phase === 'pad' || !track) {
+    const pad = stationById.get(state.station) ?? stationById.get(rocket.train.to)!;
+    out.x = pad.x;
+    out.y = 0;
+    out.z = pad.z;
+    out.dx = 0;
+    out.dy = 1;
+    out.dz = 0;
+    out.flying = false;
+    out.progress = 0;
+    return out;
+  }
+  const p = Math.max(0, state.progress - progressLag);
+  const apex = rocket.apex[state.leg];
+  const [x, z] = pointOnTrack(track, p);
+  const p2 = Math.min(1, p + 0.01);
+  const [x2, z2] = pointOnTrack(track, p2);
+  const y = apex * 4 * p * (1 - p);
+  const y2 = apex * 4 * p2 * (1 - p2);
+  const len = Math.hypot(x2 - x, y2 - y, z2 - z) || 1;
+  // Rockets stand up for liftoff and touchdown: blend the arc heading toward vertical near either pad.
+  const vertical = Math.max(0, 1 - Math.min(p, 1 - p) / 0.08);
+  const dx = ((x2 - x) / len) * (1 - vertical);
+  const dz = ((z2 - z) / len) * (1 - vertical);
+  const dy = ((y2 - y) / len) * (1 - vertical) + (p < 0.5 ? 1 : -1) * vertical;
+  const n = Math.hypot(dx, dy, dz) || 1;
+  out.x = x;
+  out.y = y;
+  out.z = z;
+  out.dx = dx / n;
+  out.dy = dy / n;
+  out.dz = dz / n;
+  out.flying = true;
+  out.progress = p;
+  return out;
 }
 
 export function pointOnTrack(track: Track, progress: number): [number, number] {
