@@ -92,20 +92,25 @@ export function SettingsButton() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="h-9 w-9 rounded-full bg-muted p-1 transition-all duration-300 hover:bg-muted/80 flex items-center justify-center"
+        className={`h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry ${isOpen ? 'border-telemetry text-telemetry' : ''}`}
         aria-label="Settings"
         aria-expanded={isOpen}
+        title="Systems"
       >
-        <Settings className="h-4 w-4" />
+        <Settings className={`h-4 w-4 transition-transform duration-500 ${isOpen ? 'rotate-90' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-12 mt-2 w-64 rounded-lg border bg-background shadow-lg p-4 z-50">
+        <div className="hud-panel ignite absolute right-0 top-10 mt-2 w-72 bg-popover shadow-2xl shadow-black/50 p-4 z-50">
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Settings</h3>
+            <div>
+              <div className="hud-label">Systems Config</div>
+              <h3 className="hud-title text-lg font-semibold mt-1">Settings</h3>
+            </div>
+            <div className="hud-divider" />
             <div className="flex items-center justify-between">
-              <label htmlFor="weather-toggle" className="text-sm font-medium cursor-pointer">
-                Show weather card
+              <label htmlFor="weather-toggle" className="text-sm cursor-pointer">
+                Show weather panel
               </label>
               <Switch
                 id="weather-toggle"
@@ -114,20 +119,20 @@ export function SettingsButton() {
               />
             </div>
             {mounted && (
-              <div className="flex items-center justify-between pt-2 border-t">
-                <label htmlFor="theme-toggle" className="text-sm font-medium cursor-pointer">
-                  Dark mode
+              <div className="flex items-center justify-between">
+                <label htmlFor="theme-toggle" className="text-sm cursor-pointer">
+                  {resolvedTheme === 'dark' ? 'Deep space (dark)' : 'Daylight ops (light)'}
                 </label>
                 <button
                   id="theme-toggle"
                   onClick={handleThemeChange}
-                  className="p-1 hover:bg-muted rounded transition-colors"
+                  className="h-8 w-8 border flex items-center justify-center hover:border-telemetry transition-colors"
                   aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
                 >
                   {resolvedTheme === 'dark' ? (
-                    <Moon className="h-4 w-4" />
+                    <Moon className="h-4 w-4 text-telemetry" />
                   ) : (
-                    <Sun className="h-4 w-4 text-amber-500" />
+                    <Sun className="h-4 w-4 text-ignition" />
                   )}
                 </button>
               </div>
