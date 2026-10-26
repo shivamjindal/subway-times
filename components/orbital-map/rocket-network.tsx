@@ -24,7 +24,7 @@ interface RocketNetworkProps {
   reducedMotion: boolean;
   markerScale: (cameraHeight: number) => number;
   onSelectRocket: (train: EstimatedTrain, stationId: string) => void;
-  stats: NetworkStats;
+  statsRef: React.RefObject<NetworkStats>;
 }
 
 const MAX_ROCKETS = 2000;
@@ -52,7 +52,7 @@ const tmpSphere = new THREE.Sphere();
 const frustum = new THREE.Frustum();
 const projScreen = new THREE.Matrix4();
 
-export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMotion, markerScale, onSelectRocket, stats }: RocketNetworkProps) {
+export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMotion, markerScale, onSelectRocket, statsRef }: RocketNetworkProps) {
   const bodyRef = useRef<THREE.InstancedMesh>(null);
   const trailRef = useRef<THREE.InstancedMesh>(null);
   const flareRef = useRef<THREE.InstancedMesh>(null);
@@ -130,9 +130,9 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
       }
       if (trail.instanceColor) trail.instanceColor.needsUpdate = true;
     }
-    stats.total = rockets.length;
-    stats.visible = count;
-    stats.detailed = state.detailed.size;
+    statsRef.current.total = rockets.length;
+    statsRef.current.visible = count;
+    statsRef.current.detailed = state.detailed.size;
   };
 
   useFrame((frameState) => {
@@ -222,7 +222,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
       if (flare.instanceColor) flare.instanceColor.needsUpdate = true;
       if (ring.instanceColor) ring.instanceColor.needsUpdate = true;
     }
-    stats.flares = flares;
+    statsRef.current.flares = flares;
   });
 
   const bodyToRocket = (instanceId: number) => {

@@ -447,37 +447,14 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     [visibleStationConfigs]
   );
 
-  if (loading) {
-    return (
-      <div className="container mx-auto p-4 max-w-6xl space-y-6">
-        <AcquiringSignal label="Acquiring signal" detail="Establishing uplink with MTA real-time feeds…" />
-        <div className="space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-56 w-full" />
-          <Skeleton className="h-56 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto p-4 max-w-6xl">
-        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
-          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
-            <AlertCircle className="h-6 w-6 text-destructive" />
-          </div>
-          <div className="hud-label !text-destructive mt-5">Telemetry error · Signal lost</div>
-          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
-          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
-          <p className="text-sm text-muted-foreground mt-4">Use the resync button in the top bar to try again.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto p-4 max-w-6xl">
+      <OrbitalMapPanel
+        savedStationIds={selectedStationIds}
+        arrivals={data?.arrivals ?? []}
+        onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
+      />
+
       {/* Station Selector */}
       <div className="mb-6">
         <StationSelector
@@ -487,12 +464,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
           onStationFilterToggle={handleStationFilterToggle}
         />
       </div>
-
-      <OrbitalMapPanel
-        savedStationIds={selectedStationIds}
-        arrivals={data?.arrivals ?? []}
-        onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
-      />
 
       {/* Weather Section */}
       {weatherCardVisible && (
@@ -589,7 +560,23 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       )}
 
       {/* Station Cards */}
-      {selectedStationIds.length === 0 ? (
+      {loading ? (
+        <div className="space-y-4">
+          <AcquiringSignal label="Acquiring signal" detail="Establishing uplink with MTA real-time feeds…" />
+          <Skeleton className="h-56 w-full" />
+          <Skeleton className="h-56 w-full" />
+        </div>
+      ) : error ? (
+        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
+          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <div className="hud-label !text-destructive mt-5">Telemetry error · Signal lost</div>
+          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
+          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
+          <p className="text-sm text-muted-foreground mt-4">Use the resync button in the top bar to try again.</p>
+        </div>
+      ) : selectedStationIds.length === 0 ? (
         <AwaitingMission />
       ) : (
         <DndContext

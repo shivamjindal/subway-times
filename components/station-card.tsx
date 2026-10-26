@@ -95,7 +95,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
       <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
         <div className="hud-label flex items-center gap-2">
           <span className="text-ignition">■</span>
-          Launch Site · Station {station.stopId}
+          Spaceport · Station {station.stopId}
         </div>
         <div
           className={`flex items-center gap-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase ${hasAlerts ? 'text-caution' : 'text-nominal'}`}
@@ -214,12 +214,12 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
             <div className="border border-dashed py-10 text-center">
               <SatelliteDish className="h-6 w-6 mx-auto text-muted-foreground" />
               <div className="hud-title text-xl font-semibold mt-3">No telemetry</div>
-              <div className="text-sm text-muted-foreground mt-1">No trains scheduled at this time</div>
+              <div className="text-sm text-muted-foreground mt-1">No boosters (trains) inbound at this time</div>
             </div>
           ) : (
             <div>
               <div className="hidden sm:grid grid-cols-[1fr_auto] gap-4 px-4 pb-2">
-                <span className="hud-label">Vehicle · Destination</span>
+                <span className="hud-label">Booster · Destination</span>
                 <span className="hud-label text-right">T-minus · ETA</span>
               </div>
               <ol className="space-y-2">
@@ -253,7 +253,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                         <div className="min-w-0">
                           {isNext && (
                             <div className="hud-label !text-ignition mb-1 flex items-center gap-1.5">
-                              <Rocket className="h-3 w-3" /> Next launch window
+                              <Rocket className="h-3 w-3" /> Next landing
                             </div>
                           )}
                           <div className="font-semibold truncate">
@@ -271,7 +271,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                         {isArriving ? (
                           <div className="font-mono text-xl sm:text-2xl font-bold text-ignition uppercase tracking-wider flex items-center justify-end gap-2">
                             <span className="pulse-dot" />
-                            Arriving
+                            Landing
                           </div>
                         ) : (
                           <div
@@ -307,7 +307,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4" />
-                      Show {filteredArrivals.length - INITIAL_TRAINS_TO_SHOW} more trains
+                      Show {filteredArrivals.length - INITIAL_TRAINS_TO_SHOW} more boosters
                     </>
                   )}
                 </button>

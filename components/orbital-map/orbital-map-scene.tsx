@@ -258,7 +258,7 @@ function SelectedMarker({ stationId, palette, reducedMotion }: { stationId: stri
 }
 
 /** Opt-in frame-rate probe for measuring the live network; writes straight to the DOM, no React state. */
-function PerfProbe({ stats, output }: { stats: NetworkStats; output: React.RefObject<HTMLDivElement | null> }) {
+function PerfProbe({ statsRef, outputRef }: { statsRef: React.RefObject<NetworkStats>; outputRef: React.RefObject<HTMLDivElement | null> }) {
   const sample = useRef({ frames: 0, since: 0, fps: 0 });
   useFrame(({ clock }) => {
     const s = sample.current;
@@ -268,10 +268,11 @@ function PerfProbe({ stats, output }: { stats: NetworkStats; output: React.RefOb
     s.fps = s.frames / (t - s.since);
     s.frames = 0;
     s.since = t;
+    const stats = statsRef.current;
     const snapshot = { fps: Math.round(s.fps), ...stats };
     (window as unknown as { __spaceNetworkPerf?: typeof snapshot }).__spaceNetworkPerf = snapshot;
-    if (output.current) {
-      output.current.textContent = `${snapshot.fps} FPS · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares`;
+    if (outputRef.current) {
+      outputRef.current.textContent = `${snapshot.fps} FPS · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares`;
     }
   });
   return null;
@@ -333,7 +334,7 @@ export default function OrbitalMapScene({
   theme,
   onContextLost,
 }: OrbitalMapSceneProps) {
-  const [stats] = useState<NetworkStats>(() => ({ total: 0, visible: 0, detailed: 0, flares: 0 }));
+  const statsRef = useRef<NetworkStats>({ total: 0, visible: 0, detailed: 0, flares: 0 });
   const perfOutput = useRef<HTMLDivElement>(null);
   const palette = PALETTES[theme];
   const [performanceOk, setPerformanceOk] = useState(true);
@@ -409,9 +410,9 @@ export default function OrbitalMapScene({
           reducedMotion={reducedMotion}
           markerScale={markerScale}
           onSelectRocket={onSelectRocket}
-          stats={stats}
+          statsRef={statsRef}
         />
-        {perf && <PerfProbe stats={stats} output={perfOutput} />}
+        {perf && <PerfProbe statsRef={statsRef} outputRef={perfOutput} />}
         <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} />
         <LabelProjector labels={labels} elements={labelElements} />
 
