@@ -19,6 +19,11 @@ export interface EstimatedTrain {
   to: string;
   departedAt: number;
   arrivesAt: number;
+  /** When the train leaves `to` again. */
+  departsAt: number;
+  /** The stop after `to`, when the feed lists one. */
+  next?: string;
+  nextArrivesAt?: number;
   basis: PositionBasis;
 }
 
@@ -32,6 +37,8 @@ const topology = topologyData as Topology;
 const DEFAULT_SEGMENT_SECONDS = 120;
 // Predictions this far out usually belong to trains still sitting at their origin terminal.
 const MAX_LOOKAHEAD_SECONDS = 20 * 60;
+// Feeds usually report departure == arrival at intermediate stops; trains really dwell ~20-30 s.
+const MIN_DWELL_SECONDS = 20;
 
 function toNumber(value: Long | number | null | undefined): number {
   if (!value) return 0;
@@ -82,22 +89,43 @@ export function estimateTrainPositions(feeds: transit_realtime.IFeedMessage[], n
       const base = { id: tripId, routeId, direction: next.stop.direction };
       const stoppedStop = stoppedAt.get(tripId);
       const stopped = stoppedStop ? splitStopId(stoppedStop) : null;
+      const stoppedIndex = stopped ? stops.findIndex((s) => s.stop.station === stopped.station) : -1;
 
+      // Index of the stop the train is heading to (or sitting at) and how it got there.
+      let toIndex = nextIndex;
+      let leg: Pick<EstimatedTrain, 'from' | 'departedAt' | 'arrivesAt' | 'basis'>;
       if (stopped) {
-        trains.push({ ...base, from: stopped.station, to: stopped.station, departedAt: now, arrivesAt: now, basis: 'stopped' });
+        toIndex = stoppedIndex;
+        const arrivedAt = stoppedIndex >= 0 ? Math.min(stops[stoppedIndex].time, now) : now;
+        leg = { from: stopped.station, departedAt: arrivedAt, arrivesAt: arrivedAt, basis: 'stopped' };
       } else if (nextIndex > 0) {
         const prev = stops[nextIndex - 1];
-        trains.push({ ...base, from: prev.stop.station, to: next.stop.station, departedAt: prev.departure, arrivesAt: next.time, basis: 'feed' });
+        leg = { from: prev.stop.station, departedAt: prev.departure, arrivesAt: next.time, basis: 'feed' };
       } else {
         const prevStation = topology.prev[`${routeId}|${next.stop.direction}|${next.stop.station}`];
         if (prevStation) {
           const runSeconds = topology.seconds[`${prevStation}>${next.stop.station}`] ?? DEFAULT_SEGMENT_SECONDS;
-          trains.push({ ...base, from: prevStation, to: next.stop.station, departedAt: next.time - runSeconds, arrivesAt: next.time, basis: 'schedule' });
+          leg = { from: prevStation, departedAt: next.time - runSeconds, arrivesAt: next.time, basis: 'schedule' };
         } else {
-          // Next stop is the origin terminal: the train is waiting there.
-          trains.push({ ...base, from: next.stop.station, to: next.stop.station, departedAt: now, arrivesAt: now, basis: 'stopped' });
+          // Next stop is the origin terminal: the train is already waiting there.
+          leg = { from: next.stop.station, departedAt: now, arrivesAt: now, basis: 'stopped' };
         }
       }
+
+      const to = toIndex >= 0 ? stops[toIndex] : null;
+      const after = toIndex >= 0 ? stops[toIndex + 1] : undefined;
+      const toStation = to?.stop.station ?? leg.from;
+      const reportedDeparture = to?.departure ?? leg.arrivesAt;
+      const dwellCap = after ? (leg.arrivesAt + after.time) / 2 : Infinity;
+      const departsAt = Math.max(reportedDeparture, Math.min(leg.arrivesAt + MIN_DWELL_SECONDS, dwellCap));
+
+      trains.push({
+        ...base,
+        ...leg,
+        to: toStation,
+        departsAt,
+        ...(after && { next: after.stop.station, nextArrivesAt: after.time }),
+      });
       seen.add(tripId);
     }
   }
