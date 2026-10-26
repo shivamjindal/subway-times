@@ -8,6 +8,8 @@ const FEED_REQUEST_TIMEOUT_MS = 10000;
 
 export const dynamic = 'force-dynamic';
 
+// Public, unauthenticated by design: serves only public MTA realtime data, like /api/subway-times.
+// Upstream fan-out is bounded by the 30 s fetch revalidate cache.
 export async function GET() {
   const headers = getMtaHeaders();
   const results = await Promise.allSettled(

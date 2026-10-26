@@ -122,15 +122,25 @@ export function spaceportManifest(trains: EstimatedTrain[], stationId: string, n
   return { landings, launches };
 }
 
-/** A rocket currently on this pad (landed and not yet launched), if any. */
+/** When a rocket sitting on this pad will launch, or Infinity if it isn't on the pad awaiting a launch. */
+function padDeparture(train: EstimatedTrain, stationId: string, now: number): number {
+  const state = rocketState(train, now);
+  if (state.phase !== 'pad' || state.station !== stationId) return Infinity;
+  if (state.station === train.to && train.next) return train.departsAt;
+  if (state.station === train.from && train.from !== train.to) return train.departedAt;
+  return Infinity;
+}
+
+/** A rocket currently on this pad (landed or dwelling, and not yet launched), if any. */
 export function rocketOnPad(trains: EstimatedTrain[], stationId: string, now: number): EstimatedTrain | null {
   let best: EstimatedTrain | null = null;
+  let bestDeparts = Infinity;
   for (const train of trains) {
-    const state = rocketState(train, now);
-    if (state.phase !== 'pad' || state.station !== stationId) continue;
-    const departs = state.station === train.to && train.next ? train.departsAt : Infinity;
-    if (departs === Infinity) continue;
-    if (!best || departs < best.departsAt) best = train;
+    const departs = padDeparture(train, stationId, now);
+    if (departs < bestDeparts) {
+      best = train;
+      bestDeparts = departs;
+    }
   }
   return best;
 }
@@ -166,7 +176,7 @@ export function livePadPlan(trains: EstimatedTrain[], stationId: string, now: nu
   if (onPad) {
     const launch = launches.find((e) => e.train === onPad && e.time > now) ?? null;
     const landed = landings.find((e) => e.train === onPad) ?? null;
-    return { touchdownAt: landed?.time ?? null, liftoffAt: onPad.departsAt, landing: landed, launch };
+    return { touchdownAt: landed?.time ?? null, liftoffAt: padDeparture(onPad, stationId, now), landing: landed, launch };
   }
 
   const landing = landings.find((e) => e.time > now) ?? null;
