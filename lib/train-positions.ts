@@ -113,7 +113,7 @@ export function estimateTrainPositions(feeds: transit_realtime.IFeedMessage[], n
       }
 
       const to = toIndex >= 0 ? stops[toIndex] : null;
-      const after = toIndex >= 0 ? stops[toIndex + 1] : undefined;
+      const after = toIndex >= 0 ? stops[toIndex + 1] : stops[nextIndex];
       const toStation = to?.stop.station ?? leg.from;
       const reportedDeparture = to?.departure ?? leg.arrivesAt;
       const dwellCap = after ? (leg.arrivesAt + after.time) / 2 : Infinity;
