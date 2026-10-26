@@ -14,6 +14,8 @@ export interface NetworkStats {
   visible: number;
   detailed: number;
   flares: number;
+  /** Smoothed CPU time of the per-frame rocket update, in ms. */
+  updateMs: number;
 }
 
 interface RocketNetworkProps {
@@ -31,17 +33,17 @@ const MAX_ROCKETS = 2000;
 const TRAIL_SAMPLES = 5;
 const TRAIL_SPACING = 0.035;
 const MAX_FLARES = 256;
-const FLARE_SECONDS = 2.4;
+const FLARE_SECONDS = 1.8;
 const DETAIL_SLOTS = 8;
 const DETAIL_SLOTS_LOW_POWER = 3;
 /** Camera-to-rocket distance (km) under which a rocket swaps its glyph for the full booster. */
-const DETAIL_DISTANCE = 3.2;
+const DETAIL_DISTANCE = 7;
 /** Visible set is recomputed at most this often while the camera moves, and at least this often while idle. */
 const CULL_THROTTLE_MS = 150;
 const CULL_IDLE_MS = 1000;
 /** Frustum padding as a fraction of camera distance, so rockets are drawn before they reach the edge. */
 const CULL_MARGIN = 0.08;
-const DETAIL_HEIGHT = 0.16;
+const DETAIL_HEIGHT = 0.22;
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpObject = new THREE.Object3D();
@@ -136,6 +138,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
   };
 
   useFrame((frameState) => {
+    const started = performance.now();
     const body = bodyRef.current;
     const trail = trailRef.current;
     const flare = flareRef.current;
@@ -203,16 +206,16 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
         const base = colors[event.rocket];
         tmpObject.quaternion.identity();
         tmpObject.position.copy(tmpVec);
-        tmpObject.scale.setScalar(scale * (0.6 + 1.6 * Math.sqrt(life)) * (event.kind === 'launch' ? 1.2 : 1));
+        tmpObject.scale.setScalar(scale * (0.35 + 0.7 * Math.sqrt(life)) * (event.kind === 'launch' ? 1.15 : 1));
         tmpObject.updateMatrix();
         flare.setMatrixAt(flares, tmpObject.matrix);
-        flare.setColorAt(flares, tmpColor.set(event.kind === 'launch' ? '#ffd2a1' : '#cfe6ff').multiplyScalar(2.2 * fade));
+        flare.setColorAt(flares, tmpColor.set(event.kind === 'launch' ? '#ffd2a1' : '#cfe6ff').multiplyScalar(1.3 * fade));
         tmpObject.rotation.set(-Math.PI / 2, 0, 0);
         tmpObject.position.y = 0.01;
-        tmpObject.scale.setScalar(scale * (0.4 + 5 * life));
+        tmpObject.scale.setScalar(scale * (0.4 + 2.6 * life));
         tmpObject.updateMatrix();
         ring.setMatrixAt(flares, tmpObject.matrix);
-        ring.setColorAt(flares, tmpColor.copy(base).multiplyScalar(fade));
+        ring.setColorAt(flares, tmpColor.copy(base).multiplyScalar(0.8 * fade));
         flares++;
       }
       flare.count = flares;
@@ -223,6 +226,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
       if (ring.instanceColor) ring.instanceColor.needsUpdate = true;
     }
     statsRef.current.flares = flares;
+    statsRef.current.updateMs = statsRef.current.updateMs * 0.9 + (performance.now() - started) * 0.1;
   });
 
   const bodyToRocket = (instanceId: number) => {

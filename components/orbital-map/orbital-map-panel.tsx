@@ -7,7 +7,7 @@ import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Sat
 import { getRouteColor, getRoutesForStation, getStation } from '@/lib/subway-data';
 import { formatArrivalTime, type TrainArrival } from '@/lib/subway-parser';
 import type { EstimatedTrain } from '@/lib/train-positions';
-import { formatTMinus, summarizeNetwork } from './rocket-timeline';
+import { formatTMinus, spaceportManifest, summarizeNetwork, type NetworkEvent } from './rocket-timeline';
 import { SpaceportCloseup } from './spaceport-closeup';
 
 const OrbitalMapScene = dynamic(() => import('./orbital-map-scene'), {
@@ -276,7 +276,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
             >
               {sceneContent}
             </div>
-            <NetworkTicker trains={telemetry.trains} clockOffset={telemetry.clockOffset} status={telemetry.status} />
+            <NetworkTicker trains={telemetry.trains} clockOffset={telemetry.clockOffset} status={telemetry.status} trackedStationIds={savedStationIds} />
             {canRender && (
               <>
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-background/90 to-transparent px-4 pb-3 pt-8">
@@ -487,10 +487,12 @@ function NetworkTicker({
   trains,
   clockOffset,
   status,
+  trackedStationIds,
 }: {
   trains: EstimatedTrain[];
   clockOffset: number;
   status: TrainTelemetry['status'];
+  trackedStationIds: string[];
 }) {
   const [now, setNow] = useState(() => Date.now() / 1000);
   useEffect(() => {
@@ -499,12 +501,19 @@ function NetworkTicker({
   }, []);
 
   if (status !== 'ok' || trains.length === 0) return null;
-  const summary = summarizeNetwork(trains, now + clockOffset);
-  const next = summary.nextLaunch;
+  const serverNow = now + clockOffset;
+  const summary = summarizeNetwork(trains, serverNow);
+  // Network-wide, something launches every fraction of a second, so tracked spaceports make a more useful countdown.
+  let next: NetworkEvent | null = null;
+  for (const id of trackedStationIds) {
+    const launch = spaceportManifest(trains, id, serverNow).launches.find((e) => e.time > serverNow);
+    if (launch && (!next || launch.time < next.time)) next = launch;
+  }
+  next ??= summary.nextLaunch;
   return (
     <div
       data-testid="network-ticker"
-      className="pointer-events-none absolute left-3 top-3 max-w-[calc(100%-7rem)] border bg-card/85 px-3 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.14em] tabular-nums backdrop-blur-sm"
+      className="pointer-events-none absolute left-3 right-3 top-12 border bg-card/85 sm:right-auto sm:top-3 sm:max-w-[calc(100%-8rem)] px-3 py-1.5 font-mono text-[0.7rem] uppercase tracking-[0.14em] tabular-nums backdrop-blur-sm"
     >
       <span className="text-telemetry">{summary.inFlight}</span> in flight
       <span className="text-muted-foreground"> · </span>
@@ -514,7 +523,7 @@ function NetworkTicker({
       {next && (
         <span className="block sm:inline">
           <span className="hidden text-muted-foreground sm:inline"> · </span>
-          next launch <span className="text-nominal">{formatTMinus(next.time - now - clockOffset)}</span> at{' '}
+          next launch <span className="text-nominal">{formatTMinus(next.time - serverNow)}</span> at{' '}
           {getStation(next.station)?.name ?? next.station}
         </span>
       )}

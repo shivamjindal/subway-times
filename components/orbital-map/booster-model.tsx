@@ -96,7 +96,7 @@ export function Booster({ handleRef, detail = 'full' }: { handleRef: Ref<Booster
             }}
           >
             <mesh position={[0, 0.17, 0.006]} material={materials.soot}>
-              <boxGeometry args={[0.022, 0.34, 0.012]} />
+              <boxGeometry args={[0.03, 0.34, 0.014]} />
             </mesh>
           </group>
         </group>

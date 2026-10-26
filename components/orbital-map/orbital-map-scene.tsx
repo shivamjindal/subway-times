@@ -44,8 +44,8 @@ const PALETTES: Record<'dark' | 'light', Palette> = {
   light: { background: '#e6ebf3', station: '#0a0f1c', saved: '#e04a0a', selected: '#0b6bcb', grid: '#c9d2e0', gridSection: '#aab7cc', glow: 1 },
 };
 
-const [CENTER_X, CENTER_Z] = project(40.725, -73.915);
-const OVERVIEW_OFFSET: [number, number, number] = [0, 27, 17];
+const [CENTER_X, CENTER_Z] = project(40.715, -73.93);
+const OVERVIEW_OFFSET: [number, number, number] = [0, 30, 18];
 const FOCUS_OFFSET: [number, number, number] = [2.2, 4.2, 3.4];
 const REDUCED_MOTION_TICK_MS = 5000;
 
@@ -269,10 +269,10 @@ function PerfProbe({ statsRef, outputRef }: { statsRef: React.RefObject<NetworkS
     s.frames = 0;
     s.since = t;
     const stats = statsRef.current;
-    const snapshot = { fps: Math.round(s.fps), ...stats };
+    const snapshot = { fps: Math.round(s.fps), ...stats, updateMs: Math.round(stats.updateMs * 100) / 100 };
     (window as unknown as { __spaceNetworkPerf?: typeof snapshot }).__spaceNetworkPerf = snapshot;
     if (outputRef.current) {
-      outputRef.current.textContent = `${snapshot.fps} FPS · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares`;
+      outputRef.current.textContent = `${snapshot.fps} FPS · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares · ${snapshot.updateMs} ms update`;
     }
   });
   return null;
@@ -334,7 +334,7 @@ export default function OrbitalMapScene({
   theme,
   onContextLost,
 }: OrbitalMapSceneProps) {
-  const statsRef = useRef<NetworkStats>({ total: 0, visible: 0, detailed: 0, flares: 0 });
+  const statsRef = useRef<NetworkStats>({ total: 0, visible: 0, detailed: 0, flares: 0, updateMs: 0 });
   const perfOutput = useRef<HTMLDivElement>(null);
   const palette = PALETTES[theme];
   const [performanceOk, setPerformanceOk] = useState(true);
