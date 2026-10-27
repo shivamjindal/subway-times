@@ -1,5 +1,6 @@
 import { transit_realtime } from 'gtfs-realtime-bindings';
 import Long from 'long';
+import { trackAt, type TrackIndex } from './nyct-tracks';
 import topologyData from './subway-map-topology.json';
 
 /**
@@ -24,6 +25,10 @@ export interface EstimatedTrain {
   /** The stop after `to`, when the feed lists one. */
   next?: string;
   nextArrivesAt?: number;
+  /** NYCT track at `from`, `to`, and `next`, when the feed's track extension carries one. */
+  fromTrack?: string;
+  toTrack?: string;
+  nextTrack?: string;
   basis: PositionBasis;
 }
 
@@ -51,7 +56,7 @@ function splitStopId(stopId: string): { station: string; direction: 'N' | 'S' } 
   return { station: stopId.slice(0, -1), direction: suffix };
 }
 
-export function estimateTrainPositions(feeds: transit_realtime.IFeedMessage[], now: number): EstimatedTrain[] {
+export function estimateTrainPositions(feeds: transit_realtime.IFeedMessage[], now: number, tracks?: TrackIndex): EstimatedTrain[] {
   const stoppedAt = new Map<string, string>();
   for (const feed of feeds) {
     for (const entity of feed.entity ?? []) {
@@ -119,12 +124,20 @@ export function estimateTrainPositions(feeds: transit_realtime.IFeedMessage[], n
       const dwellCap = after ? (leg.arrivesAt + after.time) / 2 : Infinity;
       const departsAt = Math.max(reportedDeparture, Math.min(leg.arrivesAt + MIN_DWELL_SECONDS, dwellCap));
 
+      const track = (station: string | undefined) =>
+        station === undefined ? undefined : trackAt(tracks, tripId, `${station}${base.direction}`);
+      const fromTrack = track(leg.from);
+      const toTrack = track(toStation);
+      const nextTrack = track(after?.stop.station);
       trains.push({
         ...base,
         ...leg,
         to: toStation,
         departsAt,
         ...(after && { next: after.stop.station, nextArrivesAt: after.time }),
+        ...(fromTrack && { fromTrack }),
+        ...(toTrack && { toTrack }),
+        ...(nextTrack && { nextTrack }),
       });
       seen.add(tripId);
     }

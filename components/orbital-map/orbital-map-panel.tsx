@@ -1,13 +1,14 @@
 'use client';
 
-import { Component, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
+import { getPad, getSpaceport } from '@/lib/spaceports';
 import { getRouteColor, getRoutesForStation, getStation } from '@/lib/subway-data';
 import { formatArrivalTime, type TrainArrival } from '@/lib/subway-parser';
 import type { EstimatedTrain } from '@/lib/train-positions';
-import { formatTMinus, spaceportManifest, summarizeNetwork, type NetworkEvent } from './rocket-timeline';
+import { formatTMinus, planFleet, spaceportManifest, summarizeNetwork, type Fleet, type NetworkEvent } from './rocket-timeline';
 import { SpaceportCloseup } from './spaceport-closeup';
 
 const OrbitalMapScene = dynamic(() => import('./orbital-map-scene'), {
@@ -178,6 +179,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
 
   const canRender = open && capability?.webgl === true && !contextLost;
   const telemetry = useTrainTelemetry(open && capability !== null);
+  const fleet = useMemo(() => planFleet(telemetry.trains), [telemetry.trains]);
 
   const selectStation = useCallback((stationId: string | null) => {
     setSelectedStationId(stationId);
@@ -227,7 +229,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
     sceneContent = (
       <SceneErrorBoundary key={sceneKey} fallback={unavailable('The 3D renderer hit an error.', retryScene)}>
         <OrbitalMapScene
-          trains={telemetry.trains}
+          fleet={fleet}
           clockOffset={telemetry.clockOffset}
           savedStationIds={savedStationIds}
           selectedStationId={selectedStationId}
@@ -271,12 +273,12 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
               className="absolute inset-0"
               {...(canRender && {
                 role: 'img',
-                'aria-label': `3D network of NYC subway spaceports with ${telemetry.trains.length} rockets flying between them, one per train. Use the ticker and station list beside the map to navigate by keyboard.`,
+                'aria-label': `3D network of NYC subway spaceports with ${fleet.rockets.length} rockets flying between their pads, one per train and one pad per platform. Use the ticker and station list beside the map to navigate by keyboard.`,
               })}
             >
               {sceneContent}
             </div>
-            <NetworkTicker trains={telemetry.trains} clockOffset={telemetry.clockOffset} status={telemetry.status} trackedStationIds={savedStationIds} />
+            <NetworkTicker fleet={fleet} clockOffset={telemetry.clockOffset} status={telemetry.status} trackedStationIds={savedStationIds} />
             {canRender && (
               <>
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-background/90 to-transparent px-4 pb-3 pt-8">
@@ -360,9 +362,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
 
       {closeupStationId && (
         <SpaceportCloseup
-          key={closeupStationId}
+          key={getSpaceport(closeupStationId).id}
           stationId={closeupStationId}
-          trains={telemetry.trains}
+          fleet={fleet}
           clockOffset={telemetry.clockOffset}
           webgl={capability?.webgl === true}
           lowPower={capability?.lowPower ?? true}
@@ -406,6 +408,7 @@ function SelectedStationReadout({
   }
 
   const station = getStation(stationId);
+  const spaceport = getSpaceport(stationId);
   const routes = getRoutesForStation(stationId);
   const nextArrivals = isSaved ? arrivals.filter((a) => a.stationId === stationId && a.arrivalTime > now).slice(0, 3) : [];
 
@@ -420,6 +423,12 @@ function SelectedStationReadout({
         </button>
       </div>
       <h3 className="hud-title mt-2 text-2xl font-bold">{station?.name ?? stationId}</h3>
+      {spaceport.pads.length > 0 && (
+        <p className="mt-1 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
+          {spaceport.pads.length} pads
+          {spaceport.stationIds.length > 1 ? ` · ${spaceport.name} complex` : ` · ${spaceport.pads.map((pad) => pad.heading).join(' / ')}`}
+        </p>
+      )}
       <button
         type="button"
         onClick={() => onEnter(stationId)}
@@ -484,12 +493,12 @@ function useNowSeconds() {
 }
 
 function NetworkTicker({
-  trains,
+  fleet,
   clockOffset,
   status,
   trackedStationIds,
 }: {
-  trains: EstimatedTrain[];
+  fleet: Fleet;
   clockOffset: number;
   status: TrainTelemetry['status'];
   trackedStationIds: string[];
@@ -500,13 +509,13 @@ function NetworkTicker({
     return () => clearInterval(interval);
   }, []);
 
-  if (status !== 'ok' || trains.length === 0) return null;
+  if (status !== 'ok' || fleet.rockets.length === 0) return null;
   const serverNow = now + clockOffset;
-  const summary = summarizeNetwork(trains, serverNow);
+  const summary = summarizeNetwork(fleet.rockets, serverNow);
   // Network-wide, something launches every fraction of a second, so tracked spaceports make a more useful countdown.
   let next: NetworkEvent | null = null;
   for (const id of trackedStationIds) {
-    const launch = spaceportManifest(trains, id, serverNow).launches.find((e) => e.time > serverNow);
+    const launch = spaceportManifest(fleet.rockets, getSpaceport(id).stationIds, serverNow).launches.find((e) => e.time > serverNow);
     if (launch && (!next || launch.time < next.time)) next = launch;
   }
   next ??= summary.nextLaunch;
@@ -519,12 +528,15 @@ function NetworkTicker({
       <span className="text-muted-foreground"> · </span>
       <span className="text-ignition">{summary.landing}</span> landing
       <span className="text-muted-foreground"> · </span>
+      <span className="text-caution">{summary.holding}</span> holding
+      <span className="text-muted-foreground"> · </span>
       <span>{summary.onPad}</span> on pad
       {next && (
         <span className="block sm:inline">
           <span className="hidden text-muted-foreground sm:inline"> · </span>
           next launch <span className="text-nominal">{formatTMinus(next.time - serverNow)}</span> at{' '}
-          {getStation(next.station)?.name ?? next.station}
+          {getSpaceport(next.station).name}
+          <span className="text-muted-foreground"> · {getPad(next.pad)?.label ?? next.pad}</span>
         </span>
       )}
     </div>
