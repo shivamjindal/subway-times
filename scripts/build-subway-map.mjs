@@ -2,6 +2,7 @@
 // Preprocesses static GTFS (gtfs_subway/) into the compact files used by the orbital map:
 //   lib/subway-map-geometry.json  – per-route station-to-station polylines (client, lazy-loaded)
 //   lib/subway-map-topology.json  – previous-station lookup + scheduled segment durations (server)
+//   lib/spaceports.json           – station complexes and their pads (one per platform)
 // Usage: node scripts/build-subway-map.mjs
 import fs from 'node:fs';
 import path from 'node:path';
@@ -246,6 +247,108 @@ const topology = {
     [...durations].sort(([a], [b]) => a.localeCompare(b)).map(([k, ds]) => [k, median(ds)])
   ),
 };
+
+// --- Spaceports: station complexes (transfer groups) and their pads (one per platform: stop ID + direction).
+
+const stationNames = new Map(readCsv('stops.txt').filter((s) => s.location_type === '1').map((s) => [s.stop_id, s.stop_name]));
+
+const complexOf = new Map([...stationCoords.keys()].map((id) => [id, id]));
+const findComplex = (id) => {
+  while (complexOf.get(id) !== id) id = complexOf.get(id);
+  return id;
+};
+for (const t of readCsv('transfers.txt')) {
+  if (t.from_stop_id === t.to_stop_id || !stationCoords.has(t.from_stop_id) || !stationCoords.has(t.to_stop_id)) continue;
+  const [a, b] = [findComplex(t.from_stop_id), findComplex(t.to_stop_id)].sort();
+  if (a !== b) complexOf.set(b, a);
+}
+
+// Rough outline of Manhattan island (lat, lon), enough to tell "Manhattan-bound" from "to <terminal>".
+const MANHATTAN = [
+  [40.7, -74.02], [40.712, -74.017], [40.74, -74.012], [40.76, -74.003], [40.79, -73.985], [40.82, -73.962],
+  [40.85, -73.947], [40.873, -73.93], [40.88, -73.925], [40.875, -73.91], [40.865, -73.912], [40.845, -73.928],
+  [40.826, -73.933], [40.81, -73.932], [40.8, -73.928], [40.787, -73.936], [40.775, -73.943], [40.76, -73.957],
+  [40.745, -73.969], [40.73, -73.972], [40.715, -73.976], [40.71, -73.992], [40.704, -74.005], [40.7, -74.012],
+];
+function inManhattan(stationId) {
+  const [lat, lon] = stationCoords.get(stationId);
+  let inside = false;
+  for (let i = 0, j = MANHATTAN.length - 1; i < MANHATTAN.length; j = i++) {
+    const [yi, xi] = MANHATTAN[i];
+    const [yj, xj] = MANHATTAN[j];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Manhattan's street grid runs ~29° east of true north; "uptown" is along that axis.
+const GRID_ANGLE = (29 * Math.PI) / 180;
+function uptownComponent(fromId, toId) {
+  const [ax, az] = project(...stationCoords.get(fromId));
+  const [bx, bz] = project(...stationCoords.get(toId));
+  const east = bx - ax;
+  const north = az - bz;
+  return {
+    along: north * Math.cos(GRID_ANGLE) + east * Math.sin(GRID_ANGLE),
+    across: east * Math.cos(GRID_ANGLE) - north * Math.sin(GRID_ANGLE),
+  };
+}
+
+const displayRoute = (routeId) => (['GS', 'FS', 'H'].includes(routeId) ? 'S' : routeId.replace(/X$/, ''));
+
+// pad stop ID -> { routes: Map<routeId, trips>, votes: Map<label, trips> }
+const padStats = new Map();
+for (const p of sortedPatterns) {
+  if (p.count < MIN_PATTERN_TRIPS || p.stations.some((s) => !stationCoords.has(s))) continue;
+  const terminal = stationNames.get(p.stations[p.stations.length - 1]);
+  p.stations.forEach((station, i) => {
+    const padId = `${station}${p.direction}`;
+    if (!padStats.has(padId)) padStats.set(padId, { station, direction: p.direction, routes: new Map(), votes: new Map() });
+    const stats = padStats.get(padId);
+    stats.routes.set(p.routeId, (stats.routes.get(p.routeId) ?? 0) + p.count);
+    const rest = p.stations.slice(i + 1);
+    let label;
+    if (rest.length === 0) label = 'Arrivals';
+    else if (!inManhattan(station)) label = rest.some(inManhattan) ? 'Manhattan-bound' : `to ${terminal}`;
+    else if (!inManhattan(rest[0])) label = `to ${terminal}`;
+    else {
+      // A few stops ahead, so a jog in the line (Fulton St → Park Pl) doesn't read as crosstown.
+      const ahead = rest.slice(0, 3);
+      const last = ahead.findIndex((s) => !inManhattan(s));
+      const { along, across } = uptownComponent(station, ahead[last < 0 ? ahead.length - 1 : last - 1]);
+      label = Math.abs(along) >= Math.abs(across) ? (along > 0 ? 'Uptown' : 'Downtown') : `to ${terminal}`;
+    }
+    stats.votes.set(label, (stats.votes.get(label) ?? 0) + p.count);
+  });
+}
+
+const routeOrder = (a, b) => a.localeCompare(b, 'en', { numeric: true });
+const pads = {};
+for (const [padId, stats] of [...padStats].sort(([a], [b]) => a.localeCompare(b))) {
+  const routes = [...new Set([...stats.routes.keys()].map(displayRoute))].sort(routeOrder);
+  const [label] = [...stats.votes].sort((a, b) => b[1] - a[1])[0];
+  pads[padId] = { routes, label };
+}
+
+const members = new Map();
+for (const id of stationCoords.keys()) {
+  const root = findComplex(id);
+  if (!members.has(root)) members.set(root, []);
+  members.get(root).push(id);
+}
+const spaceports = [...members.values()]
+  .map((ids) => ids.filter((id) => pads[`${id}N`] || pads[`${id}S`]).sort())
+  .filter((ids) => ids.length > 0)
+  .map((ids) => {
+    const counts = new Map();
+    for (const id of ids) counts.set(stationNames.get(id), (counts.get(stationNames.get(id)) ?? 0) + 1);
+    const [name] = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    return { id: ids[0], name, stations: ids };
+  })
+  .sort((a, b) => a.id.localeCompare(b.id));
+
+const OUT_SPACEPORTS = path.join(ROOT, 'lib', 'spaceports.json');
+fs.writeFileSync(OUT_SPACEPORTS, JSON.stringify({ spaceports, pads }));
 
 fs.writeFileSync(OUT_GEOMETRY, JSON.stringify(geometry));
 fs.writeFileSync(OUT_TOPOLOGY, JSON.stringify(topology));

@@ -4,10 +4,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getRouteColor } from '@/lib/subway-data';
+import { getPad } from '@/lib/spaceports';
 import type { EstimatedTrain } from '@/lib/train-positions';
 import { Booster, type BoosterHandle } from './booster-model';
-import { createPose, getMapStation, placeRockets, rocketPose, type PlacedRocket } from './map-geometry';
-import { LANDING_WINDOW_SECONDS, trainEvents } from './rocket-timeline';
+import { createPose, mapBerths, placeRockets, rocketPose, type PlacedRocket } from './map-geometry';
+import { LANDING_WINDOW_SECONDS, rocketEvents, type Fleet } from './rocket-timeline';
 
 export interface NetworkStats {
   total: number;
@@ -19,7 +20,7 @@ export interface NetworkStats {
 }
 
 interface RocketNetworkProps {
-  trains: EstimatedTrain[];
+  fleet: Fleet;
   clockOffset: number;
   glow: number;
   lowPower: boolean;
@@ -44,6 +45,8 @@ const CULL_IDLE_MS = 1000;
 /** Frustum padding as a fraction of camera distance, so rockets are drawn before they reach the edge. */
 const CULL_MARGIN = 0.08;
 const DETAIL_HEIGHT = 0.22;
+/** Pad clusters only resolve once the camera is this low; above it they sit inside the station marker. */
+const PAD_MARK_CAMERA_HEIGHT = 8;
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpObject = new THREE.Object3D();
@@ -54,7 +57,7 @@ const tmpSphere = new THREE.Sphere();
 const frustum = new THREE.Frustum();
 const projScreen = new THREE.Matrix4();
 
-export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMotion, markerScale, onSelectRocket, statsRef }: RocketNetworkProps) {
+export function RocketNetwork({ fleet, clockOffset, glow, lowPower, reducedMotion, markerScale, onSelectRocket, statsRef }: RocketNetworkProps) {
   const bodyRef = useRef<THREE.InstancedMesh>(null);
   const trailRef = useRef<THREE.InstancedMesh>(null);
   const flareRef = useRef<THREE.InstancedMesh>(null);
@@ -62,9 +65,9 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as THREE.EventDispatcher<{ update: object }> | null;
 
-  const rockets = useMemo(() => placeRockets(trains).slice(0, MAX_ROCKETS), [trains]);
-  const colors = useMemo(() => rockets.map((r) => new THREE.Color(`#${getRouteColor(r.train.routeId)}`).multiplyScalar(glow * 1.3)), [rockets, glow]);
-  const events = useMemo(() => rockets.flatMap((r, i) => trainEvents(r.train).map((e) => ({ ...e, rocket: i }))), [rockets]);
+  const rockets = useMemo(() => placeRockets(fleet).slice(0, MAX_ROCKETS), [fleet]);
+  const colors = useMemo(() => rockets.map((r) => new THREE.Color(`#${getRouteColor(r.rocket.train.routeId)}`).multiplyScalar(glow * 1.3)), [rockets, glow]);
+  const events = useMemo(() => rockets.flatMap((r, index) => rocketEvents(r.rocket).map((e) => ({ ...e, index }))), [rockets]);
 
   const cull = useRef({ visible: new Int32Array(MAX_ROCKETS), count: 0, detailed: new Set<number>(), last: -Infinity, dirty: true });
   const detailAssignments = useRef<number[]>(Array(DETAIL_SLOTS).fill(-1));
@@ -97,6 +100,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
     let count = 0;
     for (let i = 0; i < rockets.length; i++) {
       rocketPose(rockets[i], now, pose);
+      if (!pose.visible) continue;
       tmpVec.set(pose.x, pose.y, pose.z);
       const distance = camera.position.distanceTo(tmpVec);
       tmpSphere.set(tmpVec, 0.15 + distance * CULL_MARGIN);
@@ -164,7 +168,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
         tmpDir.set(pose.dx, pose.dy, pose.dz);
         tmpObject.quaternion.setFromUnitVectors(UP, tmpDir);
         tmpObject.position.set(pose.x, pose.y + 0.055 * scale, pose.z);
-        tmpObject.scale.setScalar(scale * (pose.flying ? 1 : 0.8));
+        tmpObject.scale.setScalar(pose.visible ? scale * (pose.flying || pose.holding ? 1 : 0.8) : 0);
         tmpObject.updateMatrix();
         body.setMatrixAt(bodyIndex++, tmpObject.matrix);
       }
@@ -196,14 +200,13 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
       for (const event of events) {
         const age = now - event.time;
         if (age < 0 || age > FLARE_SECONDS || flares >= MAX_FLARES) continue;
-        const station = getMapStation(event.station);
-        if (!station) continue;
-        tmpVec.set(station.x, 0.05, station.z);
+        const [x, z] = rockets[event.index].spots[event.visit];
+        tmpVec.set(x, 0.05, z);
         tmpSphere.set(tmpVec, 0.6);
         if (!frustum.intersectsSphere(tmpSphere)) continue;
         const life = age / FLARE_SECONDS;
         const fade = (1 - life) * (1 - life);
-        const base = colors[event.rocket];
+        const base = colors[event.index];
         tmpObject.quaternion.identity();
         tmpObject.position.copy(tmpVec);
         tmpObject.scale.setScalar(scale * (0.35 + 0.7 * Math.sqrt(life)) * (event.kind === 'launch' ? 1.15 : 1));
@@ -244,7 +247,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
     if (!rocket || e.delta > 4) return;
     e.stopPropagation();
     rocketPose(rocket, Date.now() / 1000 + clockOffset, pose);
-    onSelectRocket(rocket.train, pose.station);
+    onSelectRocket(rocket.rocket.train, pose.station);
   };
 
   return (
@@ -272,6 +275,7 @@ export function RocketNetwork({ trains, clockOffset, glow, lowPower, reducedMoti
         <ringGeometry args={[0.05, 0.065, 32]} />
         <meshBasicMaterial toneMapped={false} transparent blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
       </instancedMesh>
+      <PadMarks fleet={fleet} glow={glow} markerScale={markerScale} />
       {Array.from({ length: slots }, (_, slot) => (
         <DetailBooster
           key={slot}
@@ -313,6 +317,7 @@ function DetailBooster({
     group.visible = Boolean(rocket);
     if (!rocket) return;
     rocketPose(rocket, Date.now() / 1000 + clockOffset, pose);
+    group.visible = pose.visible;
     const descending = pose.flying && pose.progress > 0.5;
     // Boosters fly nose-first on ascent and come down engines-first.
     tmpDir.set(pose.dx, pose.dy, pose.dz);
@@ -322,13 +327,58 @@ function DetailBooster({
     group.scale.setScalar(DETAIL_HEIGHT);
     const landingBurn = pose.flying && pose.secondsToTouchdown < LANDING_WINDOW_SECONDS * 0.5;
     const ascentBurn = pose.flying && pose.progress < 0.3;
-    const legs = !pose.flying ? 1 : THREE.MathUtils.clamp(1 - (pose.secondsToTouchdown - 1) / 3, 0, 1);
-    booster.pose(descending || !pose.flying ? 1 : 0, legs, landingBurn || ascentBurn ? 1 : 0, Math.sin(clock.elapsedTime * 40));
+    const legs = pose.holding ? 0.4 : !pose.flying ? 1 : THREE.MathUtils.clamp(1 - (pose.secondsToTouchdown - 1) / 3, 0, 1);
+    const plume = pose.holding ? 0.7 : landingBurn || ascentBurn ? 1 : 0;
+    booster.pose(descending || !pose.flying ? 1 : 0, legs, plume, Math.sin(clock.elapsedTime * 40));
   });
 
   return (
     <group ref={holder} visible={false} onClick={(e) => onSelect(rockets[assignments.current[slot]], e)}>
       <Booster handleRef={handle} detail="lite" />
     </group>
+  );
+}
+
+/** One instanced draw for every berth in the network; hidden until the camera is low enough to tell pads apart. */
+function PadMarks({ fleet, glow, markerScale }: { fleet: Fleet; glow: number; markerScale: (cameraHeight: number) => number }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const berths = useMemo(() => mapBerths(fleet), [fleet]);
+  const lastScale = useRef(0);
+
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    berths.forEach(({ pad }, i) => {
+      const route = getPad(pad)?.routes[0];
+      mesh.setColorAt(i, tmpColor.set(`#${getRouteColor(route === 'S' ? 'GS' : route ?? '')}`).multiplyScalar(0.75 * glow));
+    });
+    mesh.count = berths.length;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    lastScale.current = 0;
+  }, [berths, glow]);
+
+  useFrame(({ camera }) => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    mesh.visible = camera.position.y < PAD_MARK_CAMERA_HEIGHT;
+    const scale = Math.min(1.4, markerScale(camera.position.y));
+    if (!mesh.visible || Math.abs(scale - lastScale.current) / scale < 0.08) return;
+    lastScale.current = scale;
+    tmpObject.rotation.set(-Math.PI / 2, 0, 0);
+    tmpObject.scale.setScalar(scale);
+    berths.forEach(({ x, z }, i) => {
+      tmpObject.position.set(x, 0.012, z);
+      tmpObject.updateMatrix();
+      mesh.setMatrixAt(i, tmpObject.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  });
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, Math.max(1, berths.length)]} visible={false} raycast={() => null} renderOrder={3}>
+      <ringGeometry args={[0.011, 0.016, 12]} />
+      <meshBasicMaterial toneMapped={false} transparent opacity={0.9} depthWrite={false} side={THREE.DoubleSide} />
+    </instancedMesh>
   );
 }

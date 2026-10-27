@@ -7,10 +7,12 @@ import { Bloom, EffectComposer } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import type { EstimatedTrain } from '@/lib/train-positions';
 import { MAP_STATIONS, ROUTE_LINES, getMapStation, project, type MapStation } from './map-geometry';
+import { useFrameCost } from './frame-probe';
 import { RocketNetwork, type NetworkStats } from './rocket-network';
+import type { Fleet } from './rocket-timeline';
 
 export interface OrbitalMapSceneProps {
-  trains: EstimatedTrain[];
+  fleet: Fleet;
   /** Seconds to add to the local clock so interpolation uses the server's notion of "now". */
   clockOffset: number;
   savedStationIds: string[];
@@ -259,20 +261,12 @@ function SelectedMarker({ stationId, palette, reducedMotion }: { stationId: stri
 
 /** Opt-in frame-rate probe for measuring the live network; writes straight to the DOM, no React state. */
 function PerfProbe({ statsRef, outputRef }: { statsRef: React.RefObject<NetworkStats>; outputRef: React.RefObject<HTMLDivElement | null> }) {
-  const sample = useRef({ frames: 0, since: 0, fps: 0 });
-  useFrame(({ clock }) => {
-    const s = sample.current;
-    s.frames++;
-    const t = clock.elapsedTime;
-    if (t - s.since < 1) return;
-    s.fps = s.frames / (t - s.since);
-    s.frames = 0;
-    s.since = t;
+  useFrameCost(true, (cost) => {
     const stats = statsRef.current;
-    const snapshot = { fps: Math.round(s.fps), ...stats, updateMs: Math.round(stats.updateMs * 100) / 100 };
+    const snapshot = { ...cost, ...stats, updateMs: Math.round(stats.updateMs * 100) / 100 };
     (window as unknown as { __spaceNetworkPerf?: typeof snapshot }).__spaceNetworkPerf = snapshot;
     if (outputRef.current) {
-      outputRef.current.textContent = `${snapshot.fps} FPS · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares · ${snapshot.updateMs} ms update`;
+      outputRef.current.textContent = `${cost.fps} FPS · ${cost.drawCalls} draws · ${cost.cpuMs} ms CPU · ${stats.visible}/${stats.total} rockets visible · ${stats.detailed} detailed · ${stats.flares} flares`;
     }
   });
   return null;
@@ -309,18 +303,18 @@ function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedS
 }
 
 /** With frameloop="demand", trains only advance when something asks for a frame. */
-function ReducedMotionTicker({ trains }: { trains: EstimatedTrain[] }) {
+function ReducedMotionTicker({ fleet }: { fleet: Fleet }) {
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
     invalidate();
     const interval = setInterval(() => invalidate(), REDUCED_MOTION_TICK_MS);
     return () => clearInterval(interval);
-  }, [invalidate, trains]);
+  }, [invalidate, fleet]);
   return null;
 }
 
 export default function OrbitalMapScene({
-  trains,
+  fleet,
   clockOffset,
   savedStationIds,
   selectedStationId,
@@ -381,7 +375,7 @@ export default function OrbitalMapScene({
         <color attach="background" args={[palette.background]} />
         <fog attach="fog" args={[palette.background, 50, 130]} />
         <PerformanceMonitor onDecline={() => setPerformanceOk(false)} />
-        {reducedMotion && <ReducedMotionTicker trains={trains} />}
+        {reducedMotion && <ReducedMotionTicker fleet={fleet} />}
 
         <Grid
           position={[CENTER_X, 0, CENTER_Z]}
@@ -403,7 +397,7 @@ export default function OrbitalMapScene({
         <ambientLight intensity={0.7} />
         <directionalLight position={[CENTER_X + 10, 20, CENTER_Z + 6]} intensity={1.6} />
         <RocketNetwork
-          trains={trains}
+          fleet={fleet}
           clockOffset={clockOffset}
           glow={palette.glow}
           lowPower={lowPower}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { transit_realtime } from 'gtfs-realtime-bindings';
 import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
 import { FEED_URLS, getMtaHeaders } from '@/lib/mta-feeds';
+import { emptyTrackCoverage, readNyctTracks, type TrackIndex } from '@/lib/nyct-tracks';
 import { estimateTrainPositions } from '@/lib/train-positions';
 
 const FEED_REQUEST_TIMEOUT_MS = 10000;
@@ -22,11 +23,16 @@ export async function GET() {
       if (!response.ok) {
         throw new Error(`MTA API error (${feedKey}): ${response.status} ${response.statusText}`);
       }
-      return transit_realtime.FeedMessage.decode(new Uint8Array(await response.arrayBuffer()));
+      const buffer = new Uint8Array(await response.arrayBuffer());
+      return { buffer, feed: transit_realtime.FeedMessage.decode(buffer) };
     })
   );
 
-  const feeds = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+  const decoded = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+  const feeds = decoded.map((d) => d.feed);
+  const tracks: TrackIndex = new Map();
+  const trackCoverage = emptyTrackCoverage();
+  for (const { buffer } of decoded) readNyctTracks(buffer, tracks, trackCoverage);
   const failedFeeds = results.length - feeds.length;
 
   if (feeds.length === 0) {
@@ -43,8 +49,9 @@ export async function GET() {
 
   const now = Math.floor(Date.now() / 1000);
   return NextResponse.json({
-    trains: estimateTrainPositions(feeds, now),
+    trains: estimateTrainPositions(feeds, now, tracks),
     failedFeeds,
+    trackCoverage,
     lastUpdated: now,
   });
 }

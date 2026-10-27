@@ -1,12 +1,12 @@
 'use client';
 
-import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { Plus, Repeat, Rocket, RotateCcw, Satellite, X } from 'lucide-react';
-import { getRouteColor, getRoutesForStation, getStation } from '@/lib/subway-data';
-import type { EstimatedTrain } from '@/lib/train-positions';
-import { formatTMinus, livePadPlan, spaceportManifest, type NetworkEvent } from './rocket-timeline';
-import type { PadPhase } from './spaceport-closeup-scene';
+import { getPad, getSpaceport, type Pad } from '@/lib/spaceports';
+import { getRouteColor, getStation } from '@/lib/subway-data';
+import { formatTMinus, manifestByPad, spaceportManifest, type Fleet, type NetworkEvent } from './rocket-timeline';
+import { describeApron, layoutSites, type ApronStatus } from './spaceport-layout';
 
 const SpaceportCloseupScene = dynamic(() => import('./spaceport-closeup-scene'), {
   ssr: false,
@@ -17,16 +17,9 @@ const SpaceportCloseupScene = dynamic(() => import('./spaceport-closeup-scene'),
   ),
 });
 
-const PHASE_LABELS: Record<PadPhase, string> = {
-  awaiting: 'Pad clear · awaiting inbound',
-  entry: 'Entry · grid fins deployed',
-  'landing-burn': 'Landing burn',
-  touchdown: 'Touchdown',
-  'on-pad': 'On pad · venting',
-  ignition: 'Ignition',
-  liftoff: 'Liftoff',
-  'climb-out': 'Climb-out',
-};
+/** Holds shorter than this read as on-time in the manifest. */
+const HOLD_NOTICE_SECONDS = 2;
+const EMPTY_APRON: ApronStatus = { landing: 0, holding: 0, onPad: 0, launching: 0 };
 
 class CloseupErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -45,8 +38,9 @@ class CloseupErrorBoundary extends Component<{ children: ReactNode; fallback: Re
 }
 
 interface SpaceportCloseupProps {
+  /** Any station of the spaceport; the close-up shows its whole complex. */
   stationId: string;
-  trains: EstimatedTrain[];
+  fleet: Fleet;
   clockOffset: number;
   webgl: boolean;
   lowPower: boolean;
@@ -59,7 +53,7 @@ interface SpaceportCloseupProps {
 
 export function SpaceportCloseup({
   stationId,
-  trains,
+  fleet,
   clockOffset,
   webgl,
   lowPower,
@@ -73,7 +67,7 @@ export function SpaceportCloseup({
   const [mode, setMode] = useState<'live' | 'replay'>('live');
   const [replayStart, setReplayStart] = useState(0);
   const [loop, setLoop] = useState(true);
-  const [phase, setPhase] = useState<PadPhase>('awaiting');
+  const [apron, setApron] = useState<ApronStatus>(EMPTY_APRON);
   const [contextLost, setContextLost] = useState(false);
   const now = useServerNow(clockOffset);
 
@@ -86,15 +80,18 @@ export function SpaceportCloseup({
 
   const handleContextLost = useCallback(() => setContextLost(true), []);
 
-  const station = getStation(stationId);
-  const name = station?.name ?? stationId;
-  const routes = getRoutesForStation(stationId);
-  const plan = livePadPlan(trains, stationId, now);
-  const { landings, launches } = spaceportManifest(trains, stationId, now);
-  const nextLanding = landings.find((e) => e.time > now) ?? null;
-  const nextLaunch = launches.find((e) => e.time > now) ?? null;
-  const quiet = mode === 'live' && plan.touchdownAt === null && plan.liftoffAt === null;
+  const spaceport = getSpaceport(stationId);
+  const { sites, radius } = useMemo(() => layoutSites(spaceport, fleet), [spaceport, fleet]);
+  const name = spaceport.name;
+  const routes = [...new Set(spaceport.pads.flatMap((pad) => pad.routes))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const otherNames = [...new Set(spaceport.stationIds.map((id) => getStation(id)?.name ?? id))].filter((n) => n !== name);
+  const manifest = spaceportManifest(fleet.rockets, spaceport.stationIds, now);
+  const byPad = manifestByPad(manifest, spaceport.pads.map((pad) => pad.id));
+  const nextLanding = manifest.landings.find((e) => e.time > now) ?? null;
+  const nextLaunch = manifest.launches.find((e) => e.time > now) ?? null;
+  const quiet = mode === 'live' && manifest.landings.length === 0 && manifest.launches.length === 0;
   const showScene = webgl && !contextLost;
+  const apronSummary = describeApron(apron);
 
   const startReplay = () => {
     setMode('replay');
@@ -112,17 +109,22 @@ export function SpaceportCloseup({
         <div className="relative min-h-[300px] border-b lg:border-b-0 lg:border-r">
           {showScene ? (
             <CloseupErrorBoundary fallback={<SceneUnavailable detail="The close-up renderer hit an error." />}>
-              <div className="absolute inset-0" role="img" aria-label={`Close-up of the ${name} spaceport pad. ${PHASE_LABELS[phase]}.`}>
+              <div
+                className="absolute inset-0"
+                role="img"
+                aria-label={`Close-up of the ${name} spaceport: ${sites.length} pad${sites.length === 1 ? '' : 's'}. ${apronSummary}.`}
+              >
                 <SpaceportCloseupScene
-                  stationId={stationId}
-                  trains={trains}
+                  sites={sites}
+                  radius={radius}
+                  fleet={fleet}
                   clockOffset={clockOffset}
                   mode={mode}
                   replayStart={replayStart}
                   loop={loop}
                   reducedMotion={reducedMotion}
                   lowPower={lowPower}
-                  onPhase={setPhase}
+                  onStatus={setApron}
                   onContextLost={handleContextLost}
                   perf={perf}
                 />
@@ -141,13 +143,13 @@ export function SpaceportCloseup({
                   <span className={mode === 'replay' ? 'text-caution' : 'text-nominal'}>{mode === 'replay' ? 'Replay' : 'Live'}</span>
                 )}
                 <span className="text-muted-foreground"> · </span>
-                <span className="text-telemetry" data-testid="pad-phase">{PHASE_LABELS[phase]}</span>
+                <span className="text-telemetry" data-testid="pad-phase">{apronSummary}</span>
               </div>
             </div>
           )}
           {showScene && reducedMotion && (
             <p className="absolute inset-x-0 bottom-0 bg-background/85 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
-              Reduced motion · still frame shown. The manifest updates live.
+              Reduced motion · still frame, refreshed every few seconds. The manifest updates live.
             </p>
           )}
           {showScene && quiet && !reducedMotion && (
@@ -172,11 +174,15 @@ export function SpaceportCloseup({
             </button>
           </div>
           <h2 id="spaceport-title" className="hud-title mt-2 text-2xl font-bold">{name}</h2>
+          {otherNames.length > 0 && <p className="mt-0.5 text-xs text-muted-foreground">with {otherNames.join(', ')}</p>}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {routes.map((route) => (
-              <RouteBullet key={route.routeId} routeId={route.routeId} />
+              <RouteBullet key={route} routeId={route} />
             ))}
           </div>
+          <p className="mt-2 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground" data-testid="pad-count">
+            {sites.length} pad{sites.length === 1 ? '' : 's'} · one per platform{sites.length > spaceport.pads.length ? ' and track' : ''}
+          </p>
 
           {showScene && !reducedMotion && (
             <div className="mt-4 flex flex-wrap gap-2">
@@ -197,8 +203,12 @@ export function SpaceportCloseup({
             <Countdown label="Next launch" event={nextLaunch} now={now} />
           </div>
 
-          <ManifestList title="Inbound · landings" events={landings.filter((e) => e.time > now).slice(0, 4)} now={now} direction="from" />
-          <ManifestList title="Outbound · launches" events={launches.filter((e) => e.time > now).slice(0, 4)} now={now} direction="to" />
+          <div className="hud-label mb-2 mt-5">Manifest by pad</div>
+          <ul className="space-y-3" data-testid="pad-manifest">
+            {spaceport.pads.map((pad) => (
+              <PadManifest key={pad.id} pad={pad} manifest={byPad.get(pad.id)!} now={now} />
+            ))}
+          </ul>
 
           <p className="mt-4 font-mono text-[0.6rem] uppercase leading-relaxed tracking-[0.14em] text-muted-foreground">
             Landings and launches are train arrivals and departures from MTA predictions. Estimated, not GPS.
@@ -279,6 +289,7 @@ function Countdown({ label, event, now }: { label: string; event: NetworkEvent |
               {event.kind === 'landing' ? 'from' : 'to'} {getStation(event.other ?? '')?.name ?? '—'}
             </span>
           </div>
+          <div className="mt-0.5 truncate font-mono text-[0.6rem] uppercase tracking-[0.12em] text-muted-foreground">{getPad(event.pad)?.label ?? event.pad}</div>
         </>
       ) : (
         <div className="mt-1 font-mono text-xl text-muted-foreground">—</div>
@@ -287,38 +298,48 @@ function Countdown({ label, event, now }: { label: string; event: NetworkEvent |
   );
 }
 
-function ManifestList({
-  title,
-  events,
-  now,
-  direction,
-}: {
-  title: string;
-  events: NetworkEvent[];
-  now: number;
-  direction: 'from' | 'to';
-}) {
+function PadManifest({ pad, manifest, now }: { pad: Pad; manifest: { landings: NetworkEvent[]; launches: NetworkEvent[] }; now: number }) {
+  const landings = manifest.landings.filter((e) => e.time > now).slice(0, 2);
+  const launches = manifest.launches.filter((e) => e.time > now).slice(0, 2);
   return (
-    <div className="mt-5">
-      <div className="hud-label mb-2">{title}</div>
-      {events.length === 0 ? (
-        <p className="text-xs text-muted-foreground">None in the next 20 minutes.</p>
+    <li className="border-l-2 pl-2" style={{ borderColor: `#${getRouteColor(pad.routes[0] === 'S' ? 'GS' : pad.routes[0])}` }} data-pad={pad.id}>
+      <div className="font-mono text-[0.65rem] uppercase tracking-[0.14em]">{pad.label}</div>
+      {landings.length === 0 && launches.length === 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground">No traffic in the next 20 minutes.</p>
       ) : (
-        <ul className="space-y-1.5 font-mono text-xs tabular-nums">
-          {events.map((event) => (
-            <li key={`${event.train.id}-${event.kind}-${event.time}`} className="flex items-center justify-between gap-2">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <RouteBullet routeId={event.train.routeId} />
-                <span className="truncate">
-                  {direction} {getStation(event.other ?? '')?.name ?? '—'}
-                </span>
-              </span>
-              <span className="shrink-0 text-telemetry">{formatTMinus(event.time - now)}</span>
-            </li>
+        <ul className="mt-1 space-y-1 font-mono text-xs tabular-nums">
+          {landings.map((event) => (
+            <ManifestRow key={`${event.train.id}-landing-${event.time}`} event={event} now={now} />
+          ))}
+          {launches.map((event) => (
+            <ManifestRow key={`${event.train.id}-launch-${event.time}`} event={event} now={now} />
           ))}
         </ul>
       )}
-    </div>
+    </li>
+  );
+}
+
+function ManifestRow({ event, now }: { event: NetworkEvent; now: number }) {
+  const landing = event.kind === 'landing';
+  return (
+    <li className="flex items-center justify-between gap-2">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className={landing ? 'text-ignition' : 'text-nominal'} aria-label={landing ? 'Landing' : 'Launch'}>
+          {landing ? '↓' : '↑'}
+        </span>
+        <RouteBullet routeId={event.train.routeId} />
+        <span className="truncate">
+          {landing ? 'from' : 'to'} {getStation(event.other ?? '')?.name ?? '—'}
+        </span>
+        {event.held >= HOLD_NOTICE_SECONDS && (
+          <span className="shrink-0 border border-caution/60 px-1 text-[0.6rem] text-caution" title="Holding until the pad clears">
+            hold +{Math.round(event.held)}s
+          </span>
+        )}
+      </span>
+      <span className="shrink-0 text-telemetry">{formatTMinus(event.time - now)}</span>
+    </li>
   );
 }
 
