@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { getStation } from '@/lib/subway-data';
 import type { EstimatedTrain } from '@/lib/train-positions';
 import { Booster, type BoosterHandle } from './booster-model';
+import { useFrameCost } from './frame-probe';
 import {
   CLIMB_SECONDS,
   DESCENT_SECONDS,
@@ -218,7 +219,6 @@ function PadScene({
     []
   );
   const lastPhase = useRef<PadPhase | null>(null);
-  const perfSample = useRef({ frames: 0, since: 0 });
   const dustCount = lowPower ? 24 : 64;
   const smokeCount = lowPower ? 48 : 140;
   const ventCount = lowPower ? 16 : 40;
@@ -285,15 +285,9 @@ function PadScene({
       (groundGlow.current.material as THREE.MeshBasicMaterial).opacity = Math.min(0.55, glow * 0.35);
     }
 
-    if (perf) {
-      const s = perfSample.current;
-      s.frames++;
-      if (clock.elapsedTime - s.since >= 1) {
-        (window as unknown as { __spaceportPerf?: object }).__spaceportPerf = { fps: Math.round(s.frames / (clock.elapsedTime - s.since)), phase: pose.phase };
-        s.frames = 0;
-        s.since = clock.elapsedTime;
-      }
-    }
+  });
+  useFrameCost(perf, (cost) => {
+    (window as unknown as { __spaceportPerf?: object }).__spaceportPerf = { ...cost, phase: lastPhase.current };
   });
 
   return (
