@@ -121,7 +121,12 @@ export interface PlacedRocket {
   legs: Array<Track | null>;
   /** Apex height of each leg's arc, in scene units. */
   apex: number[];
+  /** The rocket's plan before the latest poll, placed the same way; poses ease from it for POSE_EASE_SECONDS. */
+  previous?: { placed: PlacedRocket; at: number };
 }
+
+/** After a poll retimes a rocket mid-leg, its pose eases from the old plan to the new one over this long. */
+export const POSE_EASE_SECONDS = 2;
 
 function trackBetween(fromId: string, toId: string): Track | null {
   if (fromId === toId) return null;
@@ -135,19 +140,27 @@ const apexFor = (track: Track | null) =>
 
 export function placeRockets(fleet: Fleet): PlacedRocket[] {
   return fleet.rockets.flatMap((rocket) => {
-    const stations = rocket.visits.map((v) => stationById.get(v.station));
-    if (stations.some((s) => !s)) return [];
-    const spots = rocket.visits.map((v, i) => berthPosition(fleet, stations[i]!, v.pad, v.berth));
-    const holds = spots.map(([x, z], i): [number, number] => {
-      const station = stations[i]!;
-      const dx = x - station.x;
-      const dz = z - station.z;
-      const n = Math.hypot(dx, dz) || 1;
-      return [x + (dx / n) * HOLD_OFFSET_KM, z + (dz / n) * HOLD_OFFSET_KM];
-    });
-    const legs = rocket.visits.slice(1).map((v, i) => trackBetween(rocket.visits[i].station, v.station));
-    return [{ rocket, spots, holds, legs, apex: legs.map(apexFor) }];
+    const placed = placeRocket(fleet, rocket);
+    if (!placed) return [];
+    const before = rocket.previous && placeRocket(fleet, { ...rocket, visits: rocket.previous.visits, previous: undefined });
+    if (before) placed.previous = { placed: before, at: rocket.previous!.at };
+    return [placed];
   });
+}
+
+function placeRocket(fleet: Fleet, rocket: Rocket): PlacedRocket | null {
+  const stations = rocket.visits.map((v) => stationById.get(v.station));
+  if (stations.some((s) => !s)) return null;
+  const spots = rocket.visits.map((v, i) => berthPosition(fleet, stations[i]!, v.pad, v.berth));
+  const holds = spots.map(([x, z], i): [number, number] => {
+    const station = stations[i]!;
+    const dx = x - station.x;
+    const dz = z - station.z;
+    const n = Math.hypot(dx, dz) || 1;
+    return [x + (dx / n) * HOLD_OFFSET_KM, z + (dz / n) * HOLD_OFFSET_KM];
+  });
+  const legs = rocket.visits.slice(1).map((v, i) => trackBetween(rocket.visits[i].station, v.station));
+  return { rocket, spots, holds, legs, apex: legs.map(apexFor) };
 }
 
 export interface RocketPose {
@@ -180,6 +193,29 @@ const smoothstep = (x: number) => {
 
 /** Writes the rocket's ballistic-arc position and heading at `now` into `out`. `progressLag` samples a point behind it (trails). */
 export function rocketPose(placed: PlacedRocket, now: number, out: RocketPose, progressLag = 0): RocketPose {
+  planPose(placed, now, out, progressLag);
+  const previous = placed.previous;
+  const k = previous ? (now - previous.at) / POSE_EASE_SECONDS : 1;
+  if (!previous || k >= 1 || k < 0 || !out.visible) return out;
+  const from = planPose(previous.placed, now, easePose, progressLag);
+  if (!from.visible) return out;
+  const w = smoothstep(k);
+  out.x = from.x + (out.x - from.x) * w;
+  out.y = from.y + (out.y - from.y) * w;
+  out.z = from.z + (out.z - from.z) * w;
+  const dx = from.dx + (out.dx - from.dx) * w;
+  const dy = from.dy + (out.dy - from.dy) * w;
+  const dz = from.dz + (out.dz - from.dz) * w;
+  const n = Math.hypot(dx, dy, dz) || 1;
+  out.dx = dx / n;
+  out.dy = dy / n;
+  out.dz = dz / n;
+  return out;
+}
+
+const easePose = createPose();
+
+function planPose(placed: PlacedRocket, now: number, out: RocketPose, progressLag: number): RocketPose {
   const state = rocketState(placed.rocket, now);
   const visit = placed.rocket.visits[state.visit];
   out.station = state.station;

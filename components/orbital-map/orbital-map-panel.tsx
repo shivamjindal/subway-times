@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
@@ -8,7 +8,7 @@ import { getPad, getSpaceport } from '@/lib/spaceports';
 import { getRouteColor, getRoutesForStation, getStation } from '@/lib/subway-data';
 import { formatArrivalTime, type TrainArrival } from '@/lib/subway-parser';
 import type { EstimatedTrain } from '@/lib/train-positions';
-import { formatTMinus, planFleet, spaceportManifest, summarizeNetwork, type Fleet, type NetworkEvent } from './rocket-timeline';
+import { EMPTY_FLEET, formatTMinus, reconcileFleet, spaceportManifest, summarizeNetwork, type Fleet, type NetworkEvent } from './rocket-timeline';
 import { SpaceportCloseup } from './spaceport-closeup';
 
 const OrbitalMapScene = dynamic(() => import('./orbital-map-scene'), {
@@ -82,13 +82,15 @@ function usePrefersReducedMotion() {
 
 interface TrainTelemetry {
   trains: EstimatedTrain[];
+  /** Every poll is folded into the previous fleet, so a rocket's landing, dwell, and launch survive new predictions. */
+  fleet: Fleet;
   clockOffset: number;
   failedFeeds: number;
   status: 'loading' | 'ok' | 'error';
 }
 
 function useTrainTelemetry(enabled: boolean): TrainTelemetry {
-  const [telemetry, setTelemetry] = useState<TrainTelemetry>({ trains: [], clockOffset: 0, failedFeeds: 0, status: 'loading' });
+  const [telemetry, setTelemetry] = useState<TrainTelemetry>({ trains: [], fleet: EMPTY_FLEET, clockOffset: 0, failedFeeds: 0, status: 'loading' });
 
   useEffect(() => {
     if (!enabled) return;
@@ -104,12 +106,13 @@ function useTrainTelemetry(enabled: boolean): TrainTelemetry {
         const result = await response.json();
         if (!response.ok || result.error) throw new Error(result.message ?? 'Failed to fetch train positions');
         if (cancelled) return;
-        setTelemetry({
+        setTelemetry((prev) => ({
           trains: result.trains,
+          fleet: reconcileFleet(prev.fleet, result.trains, result.lastUpdated),
           clockOffset: result.lastUpdated - Date.now() / 1000,
           failedFeeds: result.failedFeeds,
           status: 'ok',
-        });
+        }));
       } catch (err) {
         if (cancelled || (err instanceof DOMException && err.name === 'AbortError')) return;
         setTelemetry((prev) => ({ ...prev, status: prev.trains.length > 0 ? 'ok' : 'error' }));
@@ -179,7 +182,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
 
   const canRender = open && capability?.webgl === true && !contextLost;
   const telemetry = useTrainTelemetry(open && capability !== null);
-  const fleet = useMemo(() => planFleet(telemetry.trains), [telemetry.trains]);
+  const { fleet } = telemetry;
 
   const selectStation = useCallback((stationId: string | null) => {
     setSelectedStationId(stationId);
