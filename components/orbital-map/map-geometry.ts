@@ -134,9 +134,15 @@ const apexFor = (track: Track | null) =>
   track ? Math.min(0.9, Math.max(0.18, track.lengths[track.lengths.length - 1] * 0.35)) : 0;
 
 export function placeRockets(fleet: Fleet): PlacedRocket[] {
-  return fleet.rockets.flatMap((rocket) => {
+  return fleet.rockets.flatMap((planned) => {
+    // Feed stops missing from the map geometry are trimmed off either end of the plan; a gap in the middle
+    // leaves no drawable leg, so that rocket is dropped.
+    const mapped = planned.visits.map((v) => stationById.has(v.station));
+    const first = mapped.indexOf(true);
+    const last = mapped.lastIndexOf(true);
+    if (first < 0 || mapped.slice(first, last + 1).includes(false)) return [];
+    const rocket = first === 0 && last === mapped.length - 1 ? planned : { ...planned, visits: planned.visits.slice(first, last + 1) };
     const stations = rocket.visits.map((v) => stationById.get(v.station));
-    if (stations.some((s) => !s)) return [];
     const spots = rocket.visits.map((v, i) => berthPosition(fleet, stations[i]!, v.pad, v.berth));
     const holds = spots.map(([x, z], i): [number, number] => {
       const station = stations[i]!;
