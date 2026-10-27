@@ -188,7 +188,8 @@ function continueRocket(old: Rocket, next: PadVisit[], now: number, pins: Map<Pa
 
   const match = next.find((v) => v.station === current.station);
   const stations = new Set(kept.map((v) => v.station));
-  let rest = next.slice(match ? next.indexOf(match) + 1 : 0).filter((v) => !stations.has(v.station));
+  // After a match, a stop at the origin is a return trip (the train reverses), not the leg already flown.
+  let rest = match ? next.slice(next.indexOf(match) + 1) : next.filter((v) => !stations.has(v.station));
 
   if (state.phase === 'flight' && launchedFrom) {
     const underway = now - launchedFrom.launchAt < CLIMB_SECONDS || current.arriveAt - now < DESCENT_SECONDS;
@@ -201,6 +202,7 @@ function continueRocket(old: Rocket, next: PadVisit[], now: number, pins: Map<Pa
       }
       current.arriveAt = current.landAt = arriveAt;
     }
+    if (current.landAt - now < DESCENT_SECONDS) pins.set(current, { land: true });
   } else {
     const descending = current.landAt - now < HOLD_RELEASE_SECONDS;
     pins.set(current, state.phase === 'pad' || descending ? { land: true } : { notBefore: now + HOLD_RELEASE_SECONDS });
@@ -314,12 +316,12 @@ export function reconcileFleet(previous: Fleet, trains: EstimatedTrain[], now: n
     const inUse = settled.get(pad);
     const split = inUse ? [...inUse].some((b) => b !== pad) : padTrackSet !== null;
     const before = previous.berths.get(pad) ?? [];
-    const list = new Set<string>(inUse ?? []);
-    if (split) {
-      for (const t of padTrackSet ?? []) list.add(`${pad}:${t}`);
-      for (const b of before) if (b !== pad) list.add(b);
-    } else list.add(pad);
-    berths.set(pad, [...list].sort());
+    const added = new Set<string>(inUse ?? []);
+    if (split) for (const t of padTrackSet ?? []) added.add(`${pad}:${t}`);
+    else added.add(pad);
+    // Existing berths keep their index; new ones are appended.
+    const kept = split ? before.filter((b) => b !== pad) : before.filter((b) => added.has(b));
+    berths.set(pad, [...kept, ...[...added].filter((b) => !kept.includes(b)).sort()]);
   }
   for (const rocket of rockets) {
     for (const v of rocket.visits) {
