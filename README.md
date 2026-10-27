@@ -94,6 +94,12 @@ the panel renders; collapsing it is remembered in `localStorage`.
 
 - Every rocket's state is pure time math on its trip estimate (`components/orbital-map/rocket-timeline.ts`),
   so nothing is simulated per frame and a rocket entering view is already in the right place.
+- Each 30 s poll is reconciled into the existing fleet rather than replanning it. A rocket keeps a stable identity
+  (reacquired by route, direction, and station if its trip ID changes) and the visit it landed at, a landing or launch
+  about to happen is pinned, new predictions retime only the rest, and a rocket whose train leaves the feed finishes
+  its current plan. Berths and tracks are remembered across polls, and map poses ease over 2 s when a leg is retimed.
+  `npm test` checks that rockets play as unbroken sequences across polls with drifting predictions, dropped stops
+  and vehicles, trip ID changes, and track churn.
 - In the full view, every rocket is one instanced draw (body, short trail); launches and landings fire a
   brief flare and ring from the event times. A ticker shows rockets in flight, landing, on pad, and the next
   launch (at a tracked spaceport when there is one).
@@ -128,6 +134,7 @@ the panel renders; collapsing it is remembered in `localStorage`.
 
 - `npm run dev` – start dev server
 - `npm run lint` – run ESLint
+- `npm test` – run the Vitest suite
 - `npm run build` – production build
 - `npm start` – run production build
 - `npm run map-data` – regenerate orbital map geometry/topology from `gtfs_subway/`

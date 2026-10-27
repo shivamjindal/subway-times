@@ -309,10 +309,10 @@ function PadManifest({ pad, manifest, now }: { pad: Pad; manifest: { landings: N
       ) : (
         <ul className="mt-1 space-y-1 font-mono text-xs tabular-nums">
           {landings.map((event) => (
-            <ManifestRow key={`${event.train.id}-landing-${event.time}`} event={event} now={now} />
+            <ManifestRow key={`${event.rocket.id}-landing-${event.station}`} event={event} now={now} />
           ))}
           {launches.map((event) => (
-            <ManifestRow key={`${event.train.id}-launch-${event.time}`} event={event} now={now} />
+            <ManifestRow key={`${event.rocket.id}-launch-${event.station}`} event={event} now={now} />
           ))}
         </ul>
       )}

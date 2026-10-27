@@ -11,6 +11,7 @@ import { useFrameCost } from './frame-probe';
 import {
   CLIMB_SECONDS,
   DESCENT_SECONDS,
+  HOLD_RELEASE_SECONDS,
   IGNITION_LEAD_SECONDS,
   formatTMinus,
   queueVisits,
@@ -49,7 +50,7 @@ const REDUCED_MOTION_TICK_MS = 5000;
 const MIN_HOLD_SECONDS = 2;
 /** Held rockets come in to a hover beside the pad, wait, then fly a short final descent once it clears. */
 const APPROACH_SECONDS = 7;
-const FINAL_DESCENT_SECONDS = 6;
+const FINAL_DESCENT_SECONDS = HOLD_RELEASE_SECONDS;
 const HOVER_HEIGHT = 15;
 const HOVER_OFFSET = 7;
 const HOVER_SLOT_ANGLE = 0.95;
@@ -434,11 +435,11 @@ function Apron({
   const live = useMemo(() => {
     const shown: Shown[] = [];
     for (const rocket of fleet.rockets) {
-      rocket.visits.forEach((visit, i) => {
+      rocket.visits.forEach((visit) => {
         const site = siteByBerth.get(visit.berth);
         if (site === undefined) return;
         shown.push({
-          key: `${rocket.train.id}:${i}`,
+          key: `${rocket.id}:${visit.station}`,
           site,
           visit,
           landingHeading: headingBetween(visit.from, visit.station),
