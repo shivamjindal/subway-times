@@ -1,23 +1,116 @@
-import { describe, expect, it } from 'vitest';
-import { resolveFeedbackForm } from './feedback-form';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  buildFeedbackWebhookPayload,
+  forwardFeedbackToWebhook,
+  resolveFeedbackWebhookUrl,
+  validateFeedback,
+} from './feedback-form';
 
-const FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSffVEZibvEzbnKWt9i2vN9KMDN3JyDQCDm_88Uq7BN_VbQjnQ/viewform';
-const defaults = { src: `${FORM}?embedded=true`, href: FORM };
-
-describe('resolveFeedbackForm', () => {
-  it("embeds the user's form when the override is missing or not http(s)", () => {
-    expect(resolveFeedbackForm(undefined)).toEqual(defaults);
-    expect(resolveFeedbackForm('  ')).toEqual(defaults);
-    expect(resolveFeedbackForm('javascript:alert(1)')).toEqual(defaults);
+describe('resolveFeedbackWebhookUrl', () => {
+  it('rejects missing, blank, and non-http(s) values', () => {
+    expect(resolveFeedbackWebhookUrl(undefined)).toBeNull();
+    expect(resolveFeedbackWebhookUrl('  ')).toBeNull();
+    expect(resolveFeedbackWebhookUrl('javascript:alert(1)')).toBeNull();
   });
 
-  it('drops usp and normalizes embedded on a pasted viewform URL', () => {
-    expect(resolveFeedbackForm(`${FORM}?usp=preview`)).toEqual(defaults);
-    expect(resolveFeedbackForm(`${FORM}?embedded=true&usp=sf_link`)).toEqual(defaults);
+  it('accepts http(s) webhook URLs', () => {
+    expect(resolveFeedbackWebhookUrl(' https://script.google.com/macros/s/abc/exec ')).toBe(
+      'https://script.google.com/macros/s/abc/exec'
+    );
+  });
+});
+
+describe('validateFeedback', () => {
+  it('requires a message and a well-formed optional email', () => {
+    expect(validateFeedback({ context: '', message: '   ', email: 'nope' })).toEqual({
+      message: expect.any(String),
+      email: expect.any(String),
+    });
+    expect(validateFeedback({ context: '', message: 'Rocket stuck on pad', email: '' })).toEqual({});
   });
 
-  it('uses any other http(s) URL as is', () => {
-    const stub = 'http://127.0.0.1:4010/form';
-    expect(resolveFeedbackForm(stub)).toEqual({ src: stub, href: stub });
+  it('enforces field length caps', () => {
+    expect(
+      validateFeedback({
+        context: 'x'.repeat(201),
+        message: 'ok',
+        email: '',
+      }).context
+    ).toEqual(expect.any(String));
+    expect(
+      validateFeedback({
+        context: '',
+        message: 'm'.repeat(4001),
+        email: '',
+      }).message
+    ).toEqual(expect.any(String));
+  });
+});
+
+describe('buildFeedbackWebhookPayload', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-30T19:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('trims fields and omits a blank email', () => {
+    expect(
+      buildFeedbackWebhookPayload({
+        context: ' Tracking L08 ',
+        message: ' Map froze ',
+        email: '  ',
+      })
+    ).toEqual({
+      context: 'Tracking L08',
+      message: 'Map froze',
+      submittedAt: '2026-10-30T19:00:00.000Z',
+    });
+
+    expect(
+      buildFeedbackWebhookPayload({
+        context: '',
+        message: 'Hi',
+        email: ' a@b.co ',
+      })
+    ).toEqual({
+      context: '',
+      message: 'Hi',
+      email: 'a@b.co',
+      submittedAt: '2026-10-30T19:00:00.000Z',
+    });
+  });
+});
+
+describe('forwardFeedbackToWebhook', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('posts JSON to the webhook and rejects non-OK responses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await forwardFeedbackToWebhook('https://script.google.com/macros/s/abc/exec', {
+      context: 'x',
+      message: 'y',
+      email: '',
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://script.google.com/macros/s/abc/exec');
+    expect(init.method).toBe('POST');
+    expect(init.redirect).toBe('follow');
+    expect(JSON.parse(init.body)).toMatchObject({ context: 'x', message: 'y' });
+
+    fetchMock.mockResolvedValueOnce(new Response('nope', { status: 500 }));
+    await expect(
+      forwardFeedbackToWebhook('https://script.google.com/macros/s/abc/exec', {
+        context: '',
+        message: 'y',
+        email: '',
+      })
+    ).rejects.toThrow(/500/);
   });
 });

@@ -12,7 +12,7 @@ Minimal Next.js app for real-time NYC subway arrivals, service alerts, and a wea
 - Show NYC weather (toggleable in settings)
 - Space network: a live 3D view where every train is a rocket launching, flying, and landing between spaceports
 - Persist selected stations and weather-card visibility in `localStorage`
-- Send feedback through an embedded Google Form at `/feedback`
+- Send feedback through a custom form at `/feedback` (Apps Script → Google Sheet)
 
 ## Stack
 
@@ -45,20 +45,59 @@ When provided, the app sends it as `x-api-key` to MTA feeds. If omitted, request
 
 ## Feedback
 
-`/feedback` (linked from the header) embeds the project's Google Form in a themed panel. Responses land
-in the form's linked Google Sheet, so there is no database, server route, or secret.
-
-The form URL defaults to the project's form in `lib/feedback-form.ts`. To use another form, set its
-`/viewform` URL and rebuild, because `NEXT_PUBLIC_` values are inlined at build time:
+`/feedback` (linked from the header) shows a HUD-styled form. The browser posts to
+`POST /api/feedback`, which forwards JSON to a Google Apps Script web app that appends a row to a
+Sheet. Set the webhook URL as a **server** env var (not `NEXT_PUBLIC_`):
 
 ```bash
-NEXT_PUBLIC_FEEDBACK_FORM_URL=https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform
+FEEDBACK_WEBHOOK_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
 ```
 
-For a `docs.google.com` `/viewform` URL, the page drops `usp` and adds `embedded=true` for the frame. The
-"open in a new tab" link uses the same URL without `embedded=true`. Any other http(s) URL is used as is.
+If `FEEDBACK_WEBHOOK_URL` is missing or invalid, `/feedback` shows "Feedback channel offline" and the
+API returns `503`.
+
+### Apps Script setup
+
+1. Create a Google Sheet with a header row: `Timestamp`, `Context`, `Message`, `Email`.
+2. Extensions → Apps Script, paste:
+
+```javascript
+const SHEET_NAME = 'Sheet1'; // rename if needed
+
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  sheet.appendRow([
+    data.submittedAt || new Date().toISOString(),
+    data.context || '',
+    data.message || '',
+    data.email || '',
+  ]);
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+```
+
+3. Deploy → New deployment → Web app. Execute as **Me**, Who has access **Anyone**.
+4. Copy the `/exec` URL into `FEEDBACK_WEBHOOK_URL` (`.env.local` locally, or your host's env settings).
+
+The form fields are: context (optional), message (required), email (optional). A honeypot field drops
+most bot submissions. Redeploy the script after editing it; the deployment URL can stay the same if
+you update that deployment.
 
 ## API routes
+
+### `POST /api/feedback`
+
+Body (JSON):
+- `context` (string, optional)
+- `message` (string, required)
+- `email` (string, optional)
+- `website` (honeypot; non-empty values are dropped as success)
+
+Returns `{ ok: true }` on success. `400` on validation errors, `503` when the webhook is not
+configured, `502` when the Apps Script call fails.
 
 ### `GET /api/subway-times`
 
