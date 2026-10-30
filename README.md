@@ -12,7 +12,7 @@ Minimal Next.js app for real-time NYC subway arrivals, service alerts, and a wea
 - Show NYC weather (toggleable in settings)
 - Space network: a live 3D view where every train is a rocket launching, flying, and landing between spaceports
 - Persist selected stations and weather-card visibility in `localStorage`
-- Send feedback to a Google Form from `/feedback`
+- Send feedback through an embedded Google Form at `/feedback`
 
 ## Stack
 
@@ -45,32 +45,18 @@ When provided, the app sends it as `x-api-key` to MTA feeds. If omitted, request
 
 ## Feedback
 
-`/feedback` (linked from the header) posts straight from the browser to a Google Form, so responses
-land in the form's linked Google Sheet. There is no database, server route, or secret.
+`/feedback` (linked from the header) embeds the project's Google Form in a themed panel. Responses land
+in the form's linked Google Sheet, so there is no database, server route, or secret.
 
-1. Create a Google Form with three questions: "What were you doing?" (short answer), "What happened?"
-   (paragraph, required), and "Email" (short answer, optional). Turn off sign-in and email collection
-   in Settings so anyone can respond. Under Responses, select **Link to Sheets**.
-2. Get the entry IDs. Open the form's ⋮ menu, select **Get pre-filled link**, type any text in each
-   question, and select **Get link**. The link contains `entry.<number>=<your text>` for each question.
-3. Set the variables in `.env.local` locally, or in the Vercel project settings, then rebuild.
-   `NEXT_PUBLIC_` values are inlined at build time.
+The form URL defaults to the project's form in `lib/feedback-form.ts`. To use another form, set its
+`/viewform` URL and rebuild, because `NEXT_PUBLIC_` values are inlined at build time:
 
 ```bash
-NEXT_PUBLIC_FEEDBACK_FORM_URL=https://docs.google.com/forms/d/e/YOUR_FORM_ID/formResponse
-NEXT_PUBLIC_FEEDBACK_ENTRY_CONTEXT=entry.111111111
-NEXT_PUBLIC_FEEDBACK_ENTRY_MESSAGE=entry.222222222
-NEXT_PUBLIC_FEEDBACK_ENTRY_EMAIL=entry.333333333   # optional; omit to hide the email field
+NEXT_PUBLIC_FEEDBACK_FORM_URL=https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform
 ```
 
-The form URL can be the `/viewform` link too, because it is rewritten to `/formResponse`. Entry IDs can be
-bare numbers. If the URL or either required entry ID is missing, the page shows "Feedback channel offline"
-instead of the form.
-
-The browser sends the request with `mode: "no-cors"`, so the response is opaque. Only a network failure
-shows as an error, and a rejected answer (for example, a required question in the form that this page
-doesn't fill) still shows as sent. Keep the form's questions in step with these fields. A hidden honeypot
-field drops most bot submissions before they are sent.
+For a `docs.google.com` `/viewform` URL, the page drops `usp` and adds `embedded=true` for the frame. The
+"open in a new tab" link uses the same URL without `embedded=true`. Any other http(s) URL is used as is.
 
 ## API routes
 
