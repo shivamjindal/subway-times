@@ -63,7 +63,6 @@ describe('POST /api/feedback', () => {
         body: JSON.stringify({
           context: 'Tracking L08',
           message: 'Map froze',
-          email: 'a@b.co',
           website: '',
         }),
       })
@@ -77,7 +76,7 @@ describe('POST /api/feedback', () => {
     expect(JSON.parse(init.body)).toMatchObject({
       context: 'Tracking L08',
       message: 'Map froze',
-      email: 'a@b.co',
     });
+    expect(JSON.parse(init.body)).not.toHaveProperty('email');
   });
 });

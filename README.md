@@ -58,7 +58,7 @@ API returns `503`.
 
 ### Apps Script setup
 
-1. Create a Google Sheet with a header row: `Timestamp`, `Context`, `Message`, `Email`.
+1. Create a Google Sheet with a header row: `Timestamp`, `Context`, `Message`.
 2. Extensions → Apps Script, paste:
 
 ```javascript
@@ -71,7 +71,6 @@ function doPost(e) {
     data.submittedAt || new Date().toISOString(),
     data.context || '',
     data.message || '',
-    data.email || '',
   ]);
   return ContentService
     .createTextOutput(JSON.stringify({ ok: true }))
@@ -82,9 +81,9 @@ function doPost(e) {
 3. Deploy → New deployment → Web app. Execute as **Me**, Who has access **Anyone**.
 4. Copy the `/exec` URL into `FEEDBACK_WEBHOOK_URL` (`.env.local` locally, or your host's env settings).
 
-The form fields are: context (optional), message (required), email (optional). A honeypot field drops
-most bot submissions. Redeploy the script after editing it; the deployment URL can stay the same if
-you update that deployment.
+The form fields are: context (optional) and message (required). A honeypot field drops most bot
+submissions. Redeploy the script after editing it; the deployment URL can stay the same if you
+update that deployment.
 
 ## API routes
 
@@ -93,7 +92,6 @@ you update that deployment.
 Body (JSON):
 - `context` (string, optional)
 - `message` (string, required)
-- `email` (string, optional)
 - `website` (honeypot; non-empty values are dropped as success)
 
 Returns `{ ok: true }` on success. `400` on validation errors, `503` when the webhook is not
