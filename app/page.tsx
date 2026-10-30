@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Orbit, RefreshCcw } from 'lucide-react';
+import Link from 'next/link';
+import { MessageSquareText, Orbit, RefreshCcw } from 'lucide-react';
 import { SubwayTimesDisplay, type SubwayTimesDisplayRef } from '@/components/subway-times-display';
 import { SettingsButton } from '@/components/settings-button';
 
@@ -70,6 +71,14 @@ export default function Home() {
               >
                 <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
+              <Link
+                href="/feedback"
+                className="h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry"
+                aria-label="Send feedback"
+                title="Transmit feedback"
+              >
+                <MessageSquareText className="h-4 w-4" />
+              </Link>
               <SettingsButton />
             </div>
           </div>
