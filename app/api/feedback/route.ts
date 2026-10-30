@@ -17,7 +17,6 @@ function readValues(body: unknown): FeedbackValues | null {
   return {
     context: read('context'),
     message: read('message'),
-    email: read('email'),
   };
 }
 
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
   const values = readValues(body);
   if (!values) {
     return NextResponse.json(
-      { error: 'Invalid payload', message: 'Expected context, message, and email fields.' },
+      { error: 'Invalid payload', message: 'Expected context and message fields.' },
       { status: 400 }
     );
   }

@@ -19,7 +19,7 @@ const STATUS_TEXT = {
   error: 'Transmission failed. Check your connection and try again.',
 } as const;
 
-const FIELD_ORDER: FeedbackField[] = ['context', 'message', 'email'];
+const FIELD_ORDER: FeedbackField[] = ['context', 'message'];
 
 const inputClass =
   'w-full border bg-background/60 px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/70 transition-colors hover:border-foreground/30 focus-visible:border-telemetry focus-visible:outline-2 focus-visible:outline-telemetry/50 aria-[invalid=true]:border-destructive';
@@ -27,7 +27,7 @@ const inputClass =
 function readValues(form: HTMLFormElement): FeedbackValues {
   const data = new FormData(form);
   const read = (name: FeedbackField) => String(data.get(name) ?? '');
-  return { context: read('context'), message: read('message'), email: read('email') };
+  return { context: read('context'), message: read('message') };
 }
 
 function FieldError({ id, message }: { id: string; message?: string }) {
@@ -193,26 +193,6 @@ function TransmissionForm() {
             className={`${inputClass} mt-2 resize-y min-h-32`}
           />
           <FieldError id="feedback-message-error" message={errors.message} />
-        </div>
-
-        <div>
-          <label htmlFor="feedback-email" className="hud-label !text-foreground">
-            Email{' '}
-            <span className="text-muted-foreground normal-case tracking-normal">
-              (optional, for a reply)
-            </span>
-          </label>
-          <input
-            id="feedback-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            aria-invalid={Boolean(errors.email)}
-            aria-describedby={errors.email ? 'feedback-email-error' : undefined}
-            className={`${inputClass} mt-2`}
-          />
-          <FieldError id="feedback-email-error" message={errors.email} />
         </div>
 
         <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
