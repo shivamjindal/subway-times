@@ -43,6 +43,9 @@ MTA_API_KEY=your_key_here
 
 When provided, the app sends it as `x-api-key` to MTA feeds. If omitted, requests are made without the header.
 
+`MTA_FEED_BASE_URL` (optional, server-only) replaces `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds` for every
+feed, e.g. to point at the mock feed in `.cursor/skills/verify-subway-times/` on an offline machine.
+
 ## Feedback
 
 `/feedback` (linked from the header) shows a HUD-styled form. The browser posts to
