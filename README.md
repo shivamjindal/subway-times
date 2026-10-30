@@ -151,8 +151,11 @@ the panel renders; collapsing it is remembered in `localStorage`.
   (reacquired by route, direction, and station if its trip ID changes) and the visit it landed at, a landing or launch
   about to happen is pinned, new predictions retime only the rest, and a rocket whose train leaves the feed finishes
   its current plan. Berths and tracks are remembered across polls, and map poses ease over 2 s when a leg is retimed.
+  A landed rocket stays on its pad until it launches; at its last known stop (a terminal, or a train that left the
+  feed) it stands for 30 s and then lifts off for the yard, on the map and in the close-up.
   `npm test` checks that rockets play as unbroken sequences across polls with drifting predictions, dropped stops
-  and vehicles, trip ID changes, and track churn.
+  and vehicles, trip ID changes, and track churn, and that at a rush-hour Times Sq no landed rocket leaves its pad
+  before launching.
 - In the full view, every rocket is one instanced draw (body, short trail); launches and landings fire a
   brief flare and ring from the event times. A ticker shows rockets in flight, landing, on pad, and the next
   launch (at a tracked spaceport when there is one).
@@ -173,7 +176,9 @@ the panel renders; collapsing it is remembered in `localStorage`.
   carries into its later stops. This is display-only — the arrivals list still shows MTA predictions.
 - On the map, each station gets a ring of pad markers (one instanced draw, shown when zoomed in) and rockets land on
   their own pad. The close-up lays out all of a spaceport's pads, animates every concurrent landing, hold, and launch,
-  frames the camera to fit them, and lists the manifest by pad.
+  frames the camera to fit them, and lists the manifest by pad. It mounts as many boosters as its plan has visits on
+  screen at once (at least 12, 5 on low-power devices); each booster follows one rocket, re-read from every poll, from
+  its approach until it has climbed away.
 - `prefers-reduced-motion` disables camera flights and flares, steps rockets every 5 s, and shows the close-up as a
   still hero frame next to the live text manifest.
 - No WebGL, a lost graphics context, or a render error shows a fallback; the ticker, manifests, and arrivals keep

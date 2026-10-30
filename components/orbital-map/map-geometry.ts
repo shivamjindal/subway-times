@@ -1,7 +1,7 @@
 import geometryData from '@/lib/subway-map-geometry.json';
 import { getPad } from '@/lib/spaceports';
 import { getAllStations, getRouteColor } from '@/lib/subway-data';
-import { rocketState, type Fleet, type Rocket } from './rocket-timeline';
+import { CLIMB_SECONDS, liftoffAt, rocketState, type Fleet, type Rocket } from './rocket-timeline';
 
 interface MapGeometry {
   origin: [number, number];
@@ -87,6 +87,8 @@ const BERTH_SPREAD_KM = 0.04;
 /** A held rocket hovers this high, offset outward from its berth so it doesn't hide the occupant. */
 export const HOLD_HEIGHT = 0.1;
 const HOLD_OFFSET_KM = 0.035;
+/** A rocket leaving its last known stop for the yard climbs straight up this far, in km, then is gone. */
+const YARD_CLIMB_KM = 0.5;
 
 export function berthPosition(fleet: Fleet, station: MapStation, pad: string, berth: string): [number, number] {
   const berths = fleet.berths.get(pad) ?? [pad];
@@ -230,6 +232,18 @@ function planPose(placed: PlacedRocket, now: number, out: RocketPose, progressLa
   const [sx, sz] = placed.spots[state.visit];
   const held = visit.landAt > visit.arriveAt;
   const track = state.phase === 'flight' ? placed.legs[state.visit - 1] : null;
+
+  const climb = (now - liftoffAt(visit)) / CLIMB_SECONDS - progressLag;
+  if (state.phase === 'offstage' && visit.to === undefined && now >= liftoffAt(visit) && climb < 1) {
+    out.x = sx;
+    out.y = YARD_CLIMB_KM * Math.max(0, climb) ** 2;
+    out.z = sz;
+    out.visible = true;
+    out.flying = true;
+    // Kept at 0: past 0.5 a flying booster is drawn coming down engines-first.
+    out.progress = 0;
+    return out;
+  }
 
   if (state.phase === 'hold') {
     // Hover beside the berth, then drop onto it over the last 1.5 s once it clears.
