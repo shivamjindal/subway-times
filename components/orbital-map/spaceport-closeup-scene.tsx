@@ -13,6 +13,7 @@ import {
   createPose,
   liveShown,
   padPose,
+  peakConcurrentVisits,
   replayPlan,
   shiftVisit,
   type PadPose,
@@ -41,7 +42,7 @@ export interface SpaceportCloseupSceneProps {
 const BOOSTER_SCALE = 8;
 /** How far deployed legs reach below the engine bell, in booster-local units. */
 const LEG_REACH = 0.16;
-/** Boosters drawn at once; every concurrent landing or launch gets one, soonest first, up to this many. */
+/** Boosters mounted up front; the scene mounts more when its plan has more visits on screen at once. */
 const BOOSTER_POOL = 12;
 const BOOSTER_POOL_LOW_POWER = 5;
 const REDUCED_MOTION_TICK_MS = 5000;
@@ -135,14 +136,19 @@ function Apron({
 }: Omit<SpaceportCloseupSceneProps, 'onContextLost' | 'radius'> & {
   labels: LabelNodes;
 }) {
-  const pool = lowPower ? BOOSTER_POOL_LOW_POWER : BOOSTER_POOL;
   const boosters = useRef<Array<BoosterHandle | null>>([]);
   const holders = useRef<Array<THREE.Group | null>>([]);
   const plumeLight = useRef<THREE.PointLight>(null);
   const groundGlow = useRef<THREE.InstancedMesh>(null);
-  const posesRef = useRef<PadPose[]>(Array.from({ length: BOOSTER_POOL }, createPose));
   const slots = useRef<Array<Shown | null>>([]);
   const refreshedAt = useRef(-Infinity);
+  const refreshedLive = useRef<Shown[] | null>(null);
+  const posesRef = useRef<PadPose[]>([]);
+  const posesFor = (count: number) => {
+    const poses = posesRef.current;
+    while (poses.length < count) poses.push(createPose());
+    return poses;
+  };
   const lastStatus = useRef('');
   const dustPer = lowPower ? 16 : 40;
   const smokePer = lowPower ? 24 : 80;
@@ -151,6 +157,10 @@ function Apron({
   const siteByBerth = useMemo(() => new Map(sites.map((s, i) => [s.berth, i])), [sites]);
   const live = useMemo(() => liveShown(fleet, siteByBerth), [fleet, siteByBerth]);
   const replay = useMemo(() => replayPlan(sites), [sites]);
+  const needed = Math.max(lowPower ? BOOSTER_POOL_LOW_POWER : BOOSTER_POOL, peakConcurrentVisits(live), replay.shown.length);
+  // Only ever grows while mounted: a booster in use keeps its slot until its rocket has left.
+  const [pool, setPool] = useState(needed);
+  if (needed > pool) setPool(needed);
 
   /** The visits on screen at `now`, with replays shifted onto the current loop. */
   const candidates = (now: number): Shown[] => {
@@ -165,7 +175,7 @@ function Apron({
   };
 
   const refresh = (now: number) => {
-    const { active } = assignSlots(slots.current, candidates(now), now, pool);
+    const active = assignSlots(slots.current, candidates(now), now);
 
     // Per-site label: the most eventful phase on that pad, how many rockets are holding over it, and the next event.
     const phases: PadPhase[] = sites.map(() => 'awaiting');
@@ -213,10 +223,11 @@ function Apron({
   };
 
   useFrame(({ clock }) => {
-    const poses = posesRef.current;
+    const poses = posesFor(pool);
     const now = Date.now() / 1000 + clockOffset;
-    if (now - refreshedAt.current > REFRESH_SECONDS || now < refreshedAt.current) {
+    if (now - refreshedAt.current > REFRESH_SECONDS || now < refreshedAt.current || refreshedLive.current !== live) {
       refreshedAt.current = now;
+      refreshedLive.current = live;
       refresh(now);
     }
     const flicker = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 47) * 0.6 + Math.sin(clock.elapsedTime * 23) * 0.4;
@@ -276,7 +287,7 @@ function Apron({
   });
 
   const emitters = (write: (pose: PadPose, site: Site | null, slot: number) => void) => {
-    const poses = posesRef.current;
+    const poses = posesFor(pool);
     for (let i = 0; i < pool; i++) {
       const shown = slots.current[i];
       write(poses[i], shown && poses[i].visible ? sites[shown.site] : null, i);

@@ -4,6 +4,7 @@ import {
   DESCENT_SECONDS,
   HOLD_RELEASE_SECONDS,
   IGNITION_LEAD_SECONDS,
+  liftoffAt,
   queueVisits,
   type Fleet,
   type PadVisit,
@@ -100,14 +101,13 @@ export function visitWindow(v: PadVisit): [number, number] {
     : isHeld(v)
       ? Math.min(v.arriveAt, v.landAt - FINAL_DESCENT_SECONDS) - APPROACH_SECONDS
       : v.landAt - DESCENT_SECONDS;
-  const end = Number.isFinite(v.launchAt) ? v.launchAt + CLIMB_SECONDS : v.clearsAt;
-  return [start, end];
+  return [start, liftoffAt(v) + CLIMB_SECONDS];
 }
 
 /** Pure function of time and visit, so replays, live data, and the still frame all share one choreography. */
 export function padPose(now: number, { visit: v, launchHeading, landingHeading, hoverSlot = 0 }: Shown, out: PadPose): PadPose {
   const td = v.landAt;
-  const lo = Number.isFinite(v.launchAt) ? v.launchAt : null;
+  const lo = Number.isFinite(liftoffAt(v)) ? liftoffAt(v) : null;
   out.dustAge = v.from ? now - td : Infinity;
   out.smokeAge = lo !== null ? now - (lo - IGNITION_LEAD_SECONDS) : -Infinity;
   out.x = 0;
@@ -211,11 +211,6 @@ export function padPose(now: number, { visit: v, launchHeading, landingHeading, 
     return out;
   }
 
-  if (now >= v.clearsAt) {
-    out.visible = false;
-    out.phase = 'awaiting';
-    return out;
-  }
   out.phase = out.dustAge < 2.5 ? 'touchdown' : 'on-pad';
   out.vent = smooth(0.5, 2.5, Number.isFinite(out.dustAge) ? out.dustAge : 3);
   return out;
@@ -320,23 +315,38 @@ export function liveShown(fleet: Fleet, siteByBerth: ReadonlyMap<string, number>
 }
 
 /**
- * Hands booster slots to the visits on screen at `now`: a slot is freed once its visit is no longer active, and free
- * slots go to waiting visits, soonest first. Mutates `slots`; returns every active visit and those left without a slot.
+ * Hands booster slots to the visits on screen at `now`. A visit keeps its slot until its own sequence is over, and
+ * the slot always draws the visit as the latest poll planned it. Free slots go to waiting visits, soonest first, and
+ * the list grows when every slot is busy, so no landing waits for a booster. Mutates `slots`; returns the active visits.
  */
-export function assignSlots(
-  slots: Array<Shown | null>,
-  candidates: Shown[],
-  now: number,
-  pool: number,
-): { active: Shown[]; unslotted: Shown[] } {
+export function assignSlots(slots: Array<Shown | null>, candidates: Shown[], now: number): Shown[] {
   const active = candidates.filter((s) => {
     const [start, end] = visitWindow(s.visit);
     return now >= start - REFRESH_SECONDS && now <= end;
   });
-  const activeKeys = new Set(active.map((s) => s.key));
-  for (let i = 0; i < pool; i++) if (slots[i] && !activeKeys.has(slots[i]!.key)) slots[i] = null;
-  const held = new Set(slots.filter(Boolean).map((s) => s!.key));
+  const byKey = new Map(active.map((s) => [s.key, s]));
+  for (let i = 0; i < slots.length; i++) slots[i] = (slots[i] && byKey.get(slots[i]!.key)) || null;
+  const held = new Set(slots.map((s) => s?.key));
   const waiting = active.filter((s) => !held.has(s.key)).sort((a, b) => visitWindow(a.visit)[0] - visitWindow(b.visit)[0]);
-  for (let i = 0; i < pool && waiting.length > 0; i++) if (!slots[i]) slots[i] = waiting.shift()!;
-  return { active, unslotted: waiting };
+  for (let i = 0; waiting.length > 0; i++) if (!slots[i]) slots[i] = waiting.shift()!;
+  return active;
+}
+
+/**
+ * The most visits on screen at once over `candidates`' plans, so the scene can mount that many boosters up front.
+ * Slots are filled lowest first, so no slot index ever reaches past this count.
+ */
+export function peakConcurrentVisits(candidates: Shown[]): number {
+  const edges = candidates.flatMap((s) => {
+    const [start, end] = visitWindow(s.visit);
+    return [
+      { t: start - REFRESH_SECONDS, d: 1 },
+      { t: end, d: -1 },
+    ];
+  });
+  edges.sort((a, b) => a.t - b.t || b.d - a.d);
+  let open = 0;
+  let peak = 0;
+  for (const { d } of edges) peak = Math.max(peak, (open += d));
+  return peak;
 }

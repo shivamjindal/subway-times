@@ -15,7 +15,10 @@ import type { EstimatedTrain } from '@/lib/train-positions';
 export const PAD_CLEAR_SECONDS = 8;
 /** A rocket delayed by a hold still sits on the pad at least this long before relaunching. */
 export const MIN_PAD_SECONDS = 8;
-/** How long a rocket stays on the pad at its last known stop before it's dropped (terminal, or stale data). */
+/**
+ * How long a rocket stands on the pad at its last known stop (a terminal, or a train that left the feed) before it
+ * lifts off for the yard. A poll that extends the trip in the meantime turns that liftoff into a launch to its next stop.
+ */
 export const FINAL_DWELL_SECONDS = 30;
 /**
  * A rocket already on a pad when first tracked (just departed in the feed, or standing at a terminal) occupies it
@@ -43,6 +46,9 @@ export interface PadVisit {
   /** When the rocket is off the berth: liftoff, or the end of its final dwell. */
   clearsAt: number;
 }
+
+/** When the rocket lifts off the berth: its launch, or at the last known stop its departure for the yard. */
+export const liftoffAt = (v: PadVisit) => (Number.isFinite(v.launchAt) ? v.launchAt : v.clearsAt);
 
 export interface Rocket {
   /** Stable across polls: the trip ID the rocket was first tracked under, kept if the feed reassigns the trip. */
@@ -206,9 +212,13 @@ function continueRocket(old: Rocket, next: PadVisit[], now: number, pins: Map<Pa
     pins.set(current, state.phase === 'pad' || descending ? { land: true } : { notBefore: now + HOLD_RELEASE_SECONDS });
   }
 
-  const ignited = Number.isFinite(current.launchAt) && current.launchAt - now <= IGNITION_LEAD_SECONDS;
+  const ignited = liftoffAt(current) - now <= IGNITION_LEAD_SECONDS;
   if (ignited) {
     pins.get(current)!.launch = true;
+    if (current.to === undefined && rest.length > 0) {
+      current.to = rest[0].station;
+      current.launchAt = current.clearsAt;
+    }
     const at = rest.findIndex((v) => v.station === current.to);
     rest = at >= 0 ? rest.slice(at) : old.visits.slice(state.visit + 1, state.visit + 2).map(copyVisit);
   } else {
