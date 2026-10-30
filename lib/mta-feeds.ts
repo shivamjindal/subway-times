@@ -31,16 +31,23 @@ export const ROUTE_TO_FEED: Record<string, string> = {
   'SI': 'si',
 };
 
+const MTA_FEED_BASE_URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds';
+
+// Server-only override (e.g. a local mock feed for offline or repeatable verification); paths stay the same.
+const feedBase = (process.env.MTA_FEED_BASE_URL?.trim() || MTA_FEED_BASE_URL).replace(/\/+$/, '');
+
 export const FEED_URLS: Record<string, string> = {
-  'ace': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace',
-  'bdfm': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm',
-  'g': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g',
-  'jz': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-jz',
-  'nqrw': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-nqrw',
-  'l': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l',
-  '1234567': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs',
-  'si': 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-si',
+  'ace': `${feedBase}/nyct%2Fgtfs-ace`,
+  'bdfm': `${feedBase}/nyct%2Fgtfs-bdfm`,
+  'g': `${feedBase}/nyct%2Fgtfs-g`,
+  'jz': `${feedBase}/nyct%2Fgtfs-jz`,
+  'nqrw': `${feedBase}/nyct%2Fgtfs-nqrw`,
+  'l': `${feedBase}/nyct%2Fgtfs-l`,
+  '1234567': `${feedBase}/nyct%2Fgtfs`,
+  'si': `${feedBase}/nyct%2Fgtfs-si`,
 };
+
+export const ALERTS_FEED_URL = `${feedBase}/camsys%2Fsubway-alerts`;
 
 export function getMtaHeaders(): HeadersInit {
   const headers: HeadersInit = {};

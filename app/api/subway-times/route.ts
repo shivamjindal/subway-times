@@ -3,9 +3,7 @@ import { transit_realtime } from 'gtfs-realtime-bindings';
 import { parseGTFSFeed, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getRoutesForStation, getStation } from '@/lib/subway-data';
 import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
-import { FEED_URLS, ROUTE_TO_FEED, getMtaHeaders } from '@/lib/mta-feeds';
-
-const ALERTS_FEED_URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts';
+import { ALERTS_FEED_URL, FEED_URLS, ROUTE_TO_FEED, getMtaHeaders } from '@/lib/mta-feeds';
 
 const DEFAULT_STATION_IDS = ['F24'];
 const MAX_STATIONS_PER_REQUEST = 10;
