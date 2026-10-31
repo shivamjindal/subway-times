@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Rocket, SatelliteDish } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, DoorOpen, Rocket, SatelliteDish } from 'lucide-react';
+import { getSpaceport } from '@/lib/spaceports';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 
@@ -13,6 +14,7 @@ interface StationCardProps {
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   selectedRoutes?: string[];
   onRouteToggle: (routeId: string) => void;
+  onEnterSpaceport: () => void;
 }
 
 const INITIAL_TRAINS_TO_SHOW = 5;
@@ -38,7 +40,7 @@ function formatCountdown(secondsUntilArrival: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle }: StationCardProps) {
+export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle, onEnterSpaceport }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const now = useNowSeconds();
@@ -47,6 +49,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   const routes = getRoutesForStation(stationId);
   const northboundRoutes = getNorthboundRoutesForStation(stationId);
   const southboundRoutes = getSouthboundRoutesForStation(stationId);
+  const hasCloseup = getSpaceport(stationId).pads.length > 0;
 
   const hasNorthbound = northboundRoutes.length > 0;
   const hasSouthbound = southboundRoutes.length > 0;
@@ -157,30 +160,49 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           </button>
         </div>
 
-        {/* Direction Filter */}
-        {(hasNorthbound || hasSouthbound) && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="hud-label">Trajectory</span>
-            <div className="inline-flex flex-wrap border divide-x">
-              {directionOptions.filter(o => o.show).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onDirectionChange(option.value)}
-                  {...stopDragPropagation}
-                  aria-pressed={direction === option.value}
-                  className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
-                    direction === option.value
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Direction Filter */}
+          {(hasNorthbound || hasSouthbound) && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="hud-label">Trajectory</span>
+              <div className="inline-flex flex-wrap border divide-x">
+                {directionOptions.filter(o => o.show).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onDirectionChange(option.value)}
+                    {...stopDragPropagation}
+                    aria-pressed={direction === option.value}
+                    className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                      direction === option.value
+                        ? 'bg-foreground text-background'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          {hasCloseup ? (
+            <button
+              type="button"
+              onClick={onEnterSpaceport}
+              {...stopDragPropagation}
+              // The card's drag listeners treat Enter/Space as "start drag" and swallow the click.
+              onKeyDown={(e) => e.stopPropagation()}
+              aria-label={`Enter spaceport: ${station.name}`}
+              className="ml-auto flex items-center gap-1.5 border border-telemetry/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-telemetry transition-colors hover:bg-telemetry/10"
+            >
+              <DoorOpen className="h-3.5 w-3.5" /> Enter spaceport
+            </button>
+          ) : (
+            <span className="ml-auto font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
+              Close-up unavailable
+            </span>
+          )}
+        </div>
       </div>
 
       {!isCollapsed && (
