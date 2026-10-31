@@ -5,7 +5,7 @@ User-facing features and how to verify each with this skill's harness. The harne
 | Feature | File | Journey | Launch |
 |---|---|---|---|
 | Live network map: every train a rocket, ticker, collapse | [live-network-map.md](live-network-map.md) | `drive.mjs map` | `launch.sh` (dev OK) |
-| Spaceport close-up, e.g. Times Sq-42 St | [spaceport-closeup.md](spaceport-closeup.md) | `drive.mjs closeup` | `launch.sh --prod` (required) |
+| Spaceport close-up, e.g. Times Sq-42 St | [spaceport-closeup.md](spaceport-closeup.md) | `drive.mjs closeup`, `drive.mjs card-closeup` | `launch.sh --prod` (required) |
 | Station search, tracking, and station cards | [station-search.md](station-search.md) | `drive.mjs search` | `launch.sh` (dev OK) |
 | Feedback page → `/api/feedback` → Apps Script | [feedback.md](feedback.md) | `drive.mjs feedback` | `launch.sh` (mock webhook) |
 
