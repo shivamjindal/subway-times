@@ -286,7 +286,7 @@ async function closeup() {
   check('close-up scene rendering', Boolean(scene), scene);
   const first = await evaluate(`({ phase: document.querySelector('[data-testid=pad-phase]').textContent, manifest: document.querySelector('[data-testid=pad-manifest]').innerText })`);
   const events = (first.manifest.match(/\d{1,2}:\d{2}|T[−-]/g) ?? []).length;
-  check('manifest lists landings or launches', events > 0 || /Nothing inbound/.test(await evaluate('document.body.innerText')), `${events} timed entries`);
+  check('manifest lists landings or launches', events > 0 || /nothing inbound/i.test(await evaluate('document.body.innerText')), `${events} timed entries`);
   await shot('closeup-live');
   await sleep(8000);
   const later = await evaluate(`({ phase: document.querySelector('[data-testid=pad-phase]').textContent, countdowns: [...document.querySelectorAll('dialog[open] aside .grid > *')].map((e) => e.innerText.replace(/\\s+/g, ' ')) })`);
@@ -313,6 +313,8 @@ async function trackStation(query, suggestionText, name) {
   await waitFor(`${name} station card`, `${find('section.hud-panel h2', name)}`, 60000);
 }
 
+// `open` drops synchronously on close, but the `close` event that unmounts the close-up fires a task later.
+const CLOSEUP_GONE = `!document.querySelector('#spaceport-title')`;
 const cardButton = (name) => `[aria-label="Enter spaceport: ${name}"]`;
 
 async function assertCloseup(label, title, stationsWith) {
@@ -328,7 +330,7 @@ async function assertCloseup(label, title, stationsWith) {
   check(`${label}: scene rendering`, Boolean(scene), scene);
   const manifest = await evaluate(`document.querySelector('[data-testid=pad-manifest]').innerText`);
   const events = (manifest.match(/T[−-]|\d{1,2}:\d{2}/g) ?? []).length;
-  check(`${label}: manifest has live traffic`, events > 0 || /Nothing inbound/.test(await evaluate('document.body.innerText')), `${events} timed entries`);
+  check(`${label}: manifest has live traffic`, events > 0 || /nothing inbound/i.test(await evaluate('document.body.innerText')), `${events} timed entries`);
 }
 
 async function cardCloseup() {
@@ -340,7 +342,7 @@ async function cardCloseup() {
   await trackStation('42 St-Port', '42 St-Port Authority', '42 St-Port Authority Bus Terminal');
   const saved = await evaluate(`localStorage.getItem('selectedStations')`);
   check('both stations tracked', /"D14"/.test(saved ?? '') && /"A27"/.test(saved ?? ''), saved);
-  const cards = await evaluate(`[...document.querySelectorAll('section.hud-panel')].filter((s) => s.querySelector('h2')).map((s) => ({ name: s.querySelector('h2').textContent, button: Boolean(s.querySelector('[aria-label^="Enter spaceport: "]')) }))`);
+  const cards = await evaluate(`[...document.querySelectorAll('section.hud-panel')].filter((s) => s.querySelector('h2.hud-title')).map((s) => ({ name: s.querySelector('h2').textContent, button: Boolean(s.querySelector('[aria-label^="Enter spaceport: "]')) }))`);
   check('every station card has Enter spaceport', cards.length === 2 && cards.every((c) => c.button), cards);
 
   // Mouse, plain station: 7 Av (D14) is its own spaceport.
@@ -348,9 +350,10 @@ async function cardCloseup() {
   await shot('card-button-desktop');
   await click('card Enter spaceport: 7 Av', cardButton('7 Av'));
   await assertCloseup('7 Av card', '7 Av');
+  await sleep(2000);
   await shot('closeup-desktop');
   await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
-  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+  await waitFor('close-up unmounted', CLOSEUP_GONE);
 
   // Keyboard, complex member: 42 St-Port Authority (A27) opens the whole Times Sq complex.
   const a27 = cardButton('42 St-Port Authority Bus Terminal');
@@ -359,28 +362,38 @@ async function cardCloseup() {
   check('Tab reaches the card button', await evaluate(`document.activeElement === document.querySelector('${a27}')`));
   await press('Enter');
   await assertCloseup('A27 card via Enter', 'Times Sq-42 St', '42 St-Port Authority Bus Terminal');
+  await sleep(2000);
   await shot('closeup-complex-keyboard');
   await press('Escape');
-  await waitFor('dialog closed by Escape', `!document.querySelector('dialog[open]')`);
+  await waitFor('close-up unmounted after Escape', CLOSEUP_GONE);
   check('focus returns to the card button', await evaluate(`document.activeElement === document.querySelector('${a27}')`));
   await press(' ');
   const viaSpace = await waitFor('close-up via Space', `document.querySelector('dialog[open] #spaceport-title')?.textContent`, 30000);
   check('Space also opens the close-up', viaSpace === 'Times Sq-42 St', viaSpace);
   await press('Escape');
-  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+  await waitFor('close-up unmounted', CLOSEUP_GONE);
 
-  // With the map collapsed, the card still opens a live close-up.
+  // Cold load with the map collapsed: the map never polled, so the card's click has to start the telemetry itself.
   await click('Collapse button', 'button[aria-controls=orbital-map-body]');
-  await waitFor('map collapsed', `!document.getElementById('orbital-map-body')`);
+  await waitFor('map collapsed', `!document.getElementById('orbital-map-body') && localStorage.getItem('orbitalMapOpen') === 'false'`);
+  const polls = () => network.filter((n) => n.url.includes('/api/train-positions'));
+  const pollsAtReload = polls().length;
+  await goto('/');
+  await waitFor('7 Av card after reload', `document.querySelector('${cardButton('7 Av')}')`, 60000);
+  await sleep(2000);
+  check('collapsed map: no telemetry polled before the click', polls().length === pollsAtReload, `${polls().length - pollsAtReload} requests`);
   await click('card Enter spaceport: 7 Av (map collapsed)', cardButton('7 Av'));
+  let polled = null;
+  for (let i = 0; i < 120 && !polled; i++, await sleep(250)) polled = polls().slice(pollsAtReload).find((n) => n.status);
+  check('collapsed map: card click fetches rocket telemetry', polled?.status === 200, polled ? `${polled.status} ${polled.url}` : 'no request');
   await assertCloseup('7 Av card, map collapsed', '7 Av');
   await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
-  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+  await waitFor('close-up unmounted', CLOSEUP_GONE);
   await click('Open network button', 'button[aria-controls=orbital-map-body]', 'Open network');
 
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await sleep(1000);
-  await evaluate(`document.querySelector('${cardButton('7 Av')}').closest('section').scrollIntoView({ block: 'center' }); true`);
+  await evaluate(`(() => { const top = document.querySelector('${cardButton('7 Av')}').closest('section').getBoundingClientRect().top; scrollBy(0, top - document.querySelector('header').getBoundingClientRect().height - 12); return true; })()`);
   await sleep(500);
   const fits = await evaluate(`(() => { const r = document.querySelector('${cardButton('7 Av')}').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth ? r.width : null; })()`);
   check('mobile: card button fits the viewport', Boolean(fits), `${fits}px wide at 390px`);
@@ -389,8 +402,12 @@ async function cardCloseup() {
   await assertCloseup('7 Av card, mobile', '7 Av');
   await sleep(1500);
   await shot('closeup-mobile');
+  await click('Replay', 'dialog[open] button[aria-pressed]', 'Replay');
+  await waitFor('replay mode', `${find('dialog[open] [role=status] span', 'Replay')}`);
+  await sleep(4000);
+  await shot('closeup-mobile-replay');
   await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
-  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+  await waitFor('close-up unmounted', CLOSEUP_GONE);
   check('close button dismisses the close-up', true);
 }
 
