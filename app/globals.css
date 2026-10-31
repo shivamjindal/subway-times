@@ -39,7 +39,7 @@
 :root {
   --font-telemetry: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-display-condensed: "Barlow Condensed", "Arial Narrow", sans-serif-condensed, sans-serif;
-  --font-spacex: "Space Grotesk Variable", sans-serif;
+  --font-wordmark: "Michroma", "Arial", sans-serif;
   --radius: 0.125rem;
   --background: #eef1f6;
   --foreground: #0a0f1c;
@@ -123,13 +123,11 @@
     line-height: 0.95;
   }
 
-  .header-title-spacex {
-    font-family: var(--font-spacex);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    line-height: 0.95;
-    font-weight: 700;
-    font-variation-settings: "wdth" 125;
+  .hud-wordmark {
+    font-family: var(--font-wordmark);
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    line-height: 1;
   }
 
   /* Panel with four corner brackets drawn via background gradients so it needs no extra DOM. */

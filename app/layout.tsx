@@ -3,7 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/theme-provider";
 import "@fontsource-variable/jetbrains-mono";
-import "@fontsource-variable/space-grotesk";
+import "@fontsource/michroma";
 import "@fontsource/barlow-condensed/500.css";
 import "@fontsource/barlow-condensed/600.css";
 import "@fontsource/barlow-condensed/700.css";

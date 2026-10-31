@@ -55,7 +55,7 @@ export default function Home() {
             </div>
             <div className="min-w-0">
               <div className="hud-label truncate">Mission Control // NYC Transit</div>
-              <h1 className="header-title-spacex text-2xl mt-1 truncate">Subway Times</h1>
+              <h1 className="hud-title hud-wordmark text-lg sm:text-xl mt-1 truncate">Subway Times</h1>
             </div>
           </div>
           <div className="flex items-center gap-4">
