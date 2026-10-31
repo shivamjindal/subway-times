@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useImperativeHandle, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
@@ -149,13 +149,18 @@ class SceneErrorBoundary extends Component<{ children: ReactNode; fallback: Reac
   }
 }
 
+export interface OrbitalMapPanelHandle {
+  enterSpaceport: (stationId: string) => void;
+}
+
 interface OrbitalMapPanelProps {
   savedStationIds: string[];
   arrivals: TrainArrival[];
   onTrackStation: (stationId: string) => void;
+  ref?: Ref<OrbitalMapPanelHandle>;
 }
 
-export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: OrbitalMapPanelProps) {
+export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref }: OrbitalMapPanelProps) {
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
@@ -181,7 +186,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
   };
 
   const canRender = open && capability?.webgl === true && !contextLost;
-  const telemetry = useTrainTelemetry(open && capability !== null);
+  // A station card can open the close-up while the map is collapsed, and the close-up still needs the fleet.
+  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null);
   const { fleet } = telemetry;
 
   const selectStation = useCallback((stationId: string | null) => {
@@ -196,6 +202,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation }: O
     setFocusNonce((n) => n + 1);
     setCloseupStationId(stationId);
   }, []);
+
+  useImperativeHandle(ref, () => ({ enterSpaceport }), [enterSpaceport]);
 
   const selectRocket = useCallback((_train: EstimatedTrain, stationId: string) => enterSpaceport(stationId), [enterSpaceport]);
 

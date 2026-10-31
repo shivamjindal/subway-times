@@ -27,7 +27,7 @@ const out = arg('--out', path.join(process.env.EVIDENCE_ROOT ?? '/opt/cursor/art
 const CHROME = process.env.CHROME_BIN ?? 'google-chrome';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const JOURNEYS = { ready, map, search, closeup, feedback };
+const JOURNEYS = { ready, map, search, closeup, 'card-closeup': cardCloseup, feedback };
 if (!JOURNEYS[journey]) {
   console.error(`usage: drive.mjs <${Object.keys(JOURNEYS).join('|')}> [--port N] [--out DIR]`);
   process.exit(2);
@@ -151,9 +151,9 @@ async function type(text) {
 }
 
 async function press(key) {
-  const code = { Enter: 13, Escape: 27 }[key];
+  const { code, vk, text } = { Enter: { code: 'Enter', vk: 13, text: '\r' }, Escape: { code: 'Escape', vk: 27 }, Tab: { code: 'Tab', vk: 9 }, ' ': { code: 'Space', vk: 32, text: ' ' } }[key];
   for (const t of ['keyDown', 'keyUp']) {
-    await cdp.send('Input.dispatchKeyEvent', { type: t, key, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...(t === 'keyDown' && key === 'Enter' ? { text: '\r' } : {}) });
+    await cdp.send('Input.dispatchKeyEvent', { type: t, key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, ...(t === 'keyDown' && text ? { text } : {}) });
   }
 }
 
@@ -297,6 +297,98 @@ async function closeup() {
   check('Replay switches the close-up to replay', true);
   await sleep(4000);
   await shot('closeup-replay');
+  await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
+  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+  check('close button dismisses the close-up', true);
+}
+
+/** Track a station by search, clicking the suggestion whose text (name + lines) matches, e.g. "7 AvLock target ↵BDE". */
+async function trackStation(query, suggestionText, name) {
+  await click('station search', '#station-search');
+  await evaluate(`document.querySelector('#station-search').select(); true`);
+  await type(query);
+  await waitFor(`${name} suggestion`, `${find('form button', suggestionText)}`);
+  await click(`${name} suggestion`, 'form button', suggestionText);
+  await waitFor(`${name} chip`, `document.querySelector('[aria-label="Remove ${name}"]')`);
+  await waitFor(`${name} station card`, `${find('section.hud-panel h2', name)}`, 60000);
+}
+
+const cardButton = (name) => `[aria-label="Enter spaceport: ${name}"]`;
+
+async function assertCloseup(label, title, stationsWith) {
+  const got = await waitFor('close-up dialog', `document.querySelector('dialog[open] #spaceport-title')?.textContent`, 60000);
+  check(`${label}: close-up opens on ${title}`, got === title, got);
+  if (stationsWith) {
+    const others = await evaluate(`document.querySelector('dialog[open] #spaceport-title').nextElementSibling?.textContent ?? ''`);
+    check(`${label}: complex lists ${stationsWith}`, others.includes(stationsWith), others);
+  }
+  const pads = await evaluate(`({ count: document.querySelector('[data-testid=pad-count]').textContent, rows: document.querySelectorAll('[data-testid=pad-manifest] [data-pad]').length })`);
+  check(`${label}: pads listed`, pads.rows > 0 && Number(pads.count.match(/^(\d+) pad/)?.[1]) >= pads.rows, pads);
+  const scene = await waitFor('close-up scene', `document.querySelector('dialog[open] [role=img][aria-label^="Close-up of the ${title} spaceport"]')?.querySelector('canvas') && document.querySelector('[data-testid=pad-phase]')?.textContent`, 60000);
+  check(`${label}: scene rendering`, Boolean(scene), scene);
+  const manifest = await evaluate(`document.querySelector('[data-testid=pad-manifest]').innerText`);
+  const events = (manifest.match(/T[−-]|\d{1,2}:\d{2}/g) ?? []).length;
+  check(`${label}: manifest has live traffic`, events > 0 || /Nothing inbound/.test(await evaluate('document.body.innerText')), `${events} timed entries`);
+}
+
+async function cardCloseup() {
+  await goto('/');
+  await evaluate(`localStorage.removeItem('selectedStations'); localStorage.removeItem('orbitalMapOpen'); true`);
+  await goto('/');
+  await waitForMap();
+  await trackStation('7 Av', '7 AvLock target ↵BDE', '7 Av');
+  await trackStation('42 St-Port', '42 St-Port Authority', '42 St-Port Authority Bus Terminal');
+  const saved = await evaluate(`localStorage.getItem('selectedStations')`);
+  check('both stations tracked', /"D14"/.test(saved ?? '') && /"A27"/.test(saved ?? ''), saved);
+  const cards = await evaluate(`[...document.querySelectorAll('section.hud-panel')].filter((s) => s.querySelector('h2')).map((s) => ({ name: s.querySelector('h2').textContent, button: Boolean(s.querySelector('[aria-label^="Enter spaceport: "]')) }))`);
+  check('every station card has Enter spaceport', cards.length === 2 && cards.every((c) => c.button), cards);
+
+  // Mouse, plain station: 7 Av (D14) is its own spaceport.
+  await evaluate(`document.querySelector('${cardButton('7 Av')}').closest('section').scrollIntoView({ block: 'center' }); true`);
+  await shot('card-button-desktop');
+  await click('card Enter spaceport: 7 Av', cardButton('7 Av'));
+  await assertCloseup('7 Av card', '7 Av');
+  await shot('closeup-desktop');
+  await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
+  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+
+  // Keyboard, complex member: 42 St-Port Authority (A27) opens the whole Times Sq complex.
+  const a27 = cardButton('42 St-Port Authority Bus Terminal');
+  await evaluate(`[...document.querySelector('${a27}').closest('section').querySelectorAll('button[aria-pressed]')].filter((b) => /^[↑↓]|^All$/.test(b.textContent)).at(-1).focus(); true`);
+  await press('Tab');
+  check('Tab reaches the card button', await evaluate(`document.activeElement === document.querySelector('${a27}')`));
+  await press('Enter');
+  await assertCloseup('A27 card via Enter', 'Times Sq-42 St', '42 St-Port Authority Bus Terminal');
+  await shot('closeup-complex-keyboard');
+  await press('Escape');
+  await waitFor('dialog closed by Escape', `!document.querySelector('dialog[open]')`);
+  check('focus returns to the card button', await evaluate(`document.activeElement === document.querySelector('${a27}')`));
+  await press(' ');
+  const viaSpace = await waitFor('close-up via Space', `document.querySelector('dialog[open] #spaceport-title')?.textContent`, 30000);
+  check('Space also opens the close-up', viaSpace === 'Times Sq-42 St', viaSpace);
+  await press('Escape');
+  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+
+  // With the map collapsed, the card still opens a live close-up.
+  await click('Collapse button', 'button[aria-controls=orbital-map-body]');
+  await waitFor('map collapsed', `!document.getElementById('orbital-map-body')`);
+  await click('card Enter spaceport: 7 Av (map collapsed)', cardButton('7 Av'));
+  await assertCloseup('7 Av card, map collapsed', '7 Av');
+  await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
+  await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
+  await click('Open network button', 'button[aria-controls=orbital-map-body]', 'Open network');
+
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(1000);
+  await evaluate(`document.querySelector('${cardButton('7 Av')}').closest('section').scrollIntoView({ block: 'center' }); true`);
+  await sleep(500);
+  const fits = await evaluate(`(() => { const r = document.querySelector('${cardButton('7 Av')}').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth ? r.width : null; })()`);
+  check('mobile: card button fits the viewport', Boolean(fits), `${fits}px wide at 390px`);
+  await shot('card-button-mobile');
+  await click('mobile card Enter spaceport: 7 Av', cardButton('7 Av'));
+  await assertCloseup('7 Av card, mobile', '7 Av');
+  await sleep(1500);
+  await shot('closeup-mobile');
   await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
   await waitFor('dialog closed', `!document.querySelector('dialog[open]')`);
   check('close button dismisses the close-up', true);

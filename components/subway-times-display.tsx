@@ -8,7 +8,7 @@ import { getRoutesForStation } from '@/lib/subway-data';
 import { AlertCircle, Cloud, CloudRain, Orbit, Radar, Rocket, Satellite, Sun, Wind } from 'lucide-react';
 import { StationSelector } from './station-selector';
 import { StationCard } from './station-card';
-import { OrbitalMapPanel } from './orbital-map/orbital-map-panel';
+import { OrbitalMapPanel, type OrbitalMapPanelHandle } from './orbital-map/orbital-map-panel';
 import {
   DndContext,
   closestCenter,
@@ -88,6 +88,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
   const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
   const hasDataRef = useRef(false);
+  const mapRef = useRef<OrbitalMapPanelHandle>(null);
 
   // Load stations from localStorage on mount
   useEffect(() => {
@@ -450,6 +451,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   return (
     <div className="container mx-auto p-4 max-w-6xl">
       <OrbitalMapPanel
+        ref={mapRef}
         savedStationIds={selectedStationIds}
         arrivals={data?.arrivals ?? []}
         onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
@@ -597,6 +599,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
                   alerts={alertsByStation[config.stationId] || []}
                   onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
                   onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                  onEnterSpaceport={() => mapRef.current?.enterSpaceport(config.stationId)}
                   showDragHandle={stationConfigs.length > 1}
                 />
               ))}
@@ -630,10 +633,11 @@ interface SortableStationCardProps {
   alerts: ServiceAlert[];
   onDirectionChange: (direction: 'all' | 'N' | 'S') => void;
   onRouteToggle: (routeId: string) => void;
+  onEnterSpaceport: () => void;
   showDragHandle: boolean;
 }
 
-function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRouteToggle, showDragHandle }: SortableStationCardProps) {
+function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRouteToggle, onEnterSpaceport, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -667,6 +671,7 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRo
           onDirectionChange={onDirectionChange}
           selectedRoutes={config.selectedRoutes}
           onRouteToggle={onRouteToggle}
+          onEnterSpaceport={onEnterSpaceport}
         />
       </div>
     </div>
