@@ -85,7 +85,7 @@ Each journey's steps and assertions are in `features/<feature>.md`. Stable handl
 | `[aria-label="Enter spaceport: <station>"]` | same close-up, from a station card |
 | `dialog[open] #spaceport-title`, `[data-testid=pad-count]`, `[data-testid=pad-phase]`, `[data-testid=pad-manifest] [data-pad]` | close-up |
 | `[aria-label="Close spaceport"]` | closes the close-up |
-| `[aria-label="Send feedback"]` → `/feedback`; `#feedback-context`, `#feedback-message`, `button[type=submit]`, `#feedback-sent-title` | feedback |
+| `[aria-label="Submit feedback"]` (red header button) → `/feedback`; `#feedback-context`, `#feedback-message`, `button[type=submit]`, `#feedback-sent-title` | feedback |
 | `/?perf=1`, `window.__spaceNetworkPerf` | renderer frame stats (FPS, draws, visible/total rockets) |
 
 Don't click the WebGL canvas to pick a spaceport. Pixel targets move with the camera and the data. Go through search, then "Tracked spaceports", then "Enter spaceport", which is a real user path with stable handles.

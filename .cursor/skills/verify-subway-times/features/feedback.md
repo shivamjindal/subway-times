@@ -2,14 +2,15 @@
 
 ## Sub-features
 
-- `/feedback` page (header link `aria-label="Send feedback"`, back link `aria-label="Back to mission control"`).
+- Header button on `/`: a red link centred in the header bar, `aria-label="Submit feedback"`, reading "SUBMIT FEEDBACK" at `lg` (≥1024px) and "FEEDBACK" below that. Below `sm` the logo square is hidden and the title steps down so the button stays centred without truncating "SUBWAY TIMES". Clocks show from `md`.
+- `/feedback` page (back link `aria-label="Back to mission control"`).
 - Form fields: "What were you doing?" (`#feedback-context`, optional, max 200 characters) and "What happened?" (`#feedback-message`, required, max 4000). There's also a hidden honeypot `#feedback-website`.
 - The submit button reads "Transmit", then "Transmitting…" while sending, then shows "Transmission received" (`#feedback-sent-title`). On failure it shows "Signal lost" (`role=alert`) and the button becomes "Retry transmission".
 - `POST /api/feedback` validates the body. It returns 400 on validation errors, 503 when `FEEDBACK_WEBHOOK_URL` is missing (the page shows "Feedback channel offline"), and 502 when the webhook fails. A filled honeypot is dropped but still answered `{ok:true}`. Otherwise it forwards `{context, message, submittedAt}` to the Apps Script web app.
 
 ## How to get to it (user POV)
 
-Click the speech-bubble button in the header of `/`. Optionally fill in "What were you doing?", describe the problem, and click Transmit. A success panel replaces the form.
+Click the red "SUBMIT FEEDBACK" button in the centre of the header on `/`. Optionally fill in "What were you doing?", describe the problem, and click Transmit. A success panel replaces the form.
 
 ## Driving it with drive.mjs
 
@@ -20,11 +21,12 @@ node .cursor/skills/verify-subway-times/scripts/drive.mjs feedback
 
 The journey runs these steps:
 
-1. It clicks "Send feedback" on `/` and waits for `/feedback`.
-2. It types a context and a message stamped with the run time (`feedback-filled.png`).
-3. It clicks Transmit and waits for "Transmission received" (`feedback-sent.png`).
-4. It asserts the captured browser `POST /api/feedback` returned 200 with exactly the typed context and message, and the honeypot empty.
-5. It asserts the mock webhook's newest line in `webhook.jsonl` has a body with exactly `{context, message, submittedAt}`, matching values, and a parseable timestamp. That file is copied into the evidence.
+1. At 1440, 1024, 768, and 390 px it checks the header button: the right label (untruncated), centred within 1 px, at least 12 px clear of the title text and the right-hand controls, and "SUBWAY TIMES" not truncated (`header-<width>.png`, cropped to the header). Then it Tabs to the button and asserts a visible focus outline (`header-1440-focus.png`).
+2. It clicks "Submit feedback" on `/` and waits for `/feedback`.
+3. It types a context and a message stamped with the run time (`feedback-filled.png`).
+4. It clicks Transmit and waits for "Transmission received" (`feedback-sent.png`).
+5. It asserts the captured browser `POST /api/feedback` returned 200 with exactly the typed context and message, and the honeypot empty.
+6. It asserts the mock webhook's newest line in `webhook.jsonl` has a body with exactly `{context, message, submittedAt}`, matching values, and a parseable timestamp. That file is copied into the evidence.
 
 For error paths, use the API directly: `curl -s -XPOST localhost:3100/api/feedback -H 'content-type: application/json' -d '{"message":""}'` (400). For 502, restart only the mock webhook with `--fail` on the same port and log.
 

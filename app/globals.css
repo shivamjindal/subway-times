@@ -29,6 +29,9 @@
   --color-telemetry: var(--telemetry);
   --color-nominal: var(--nominal);
   --color-caution: var(--caution);
+  --color-abort: var(--abort);
+  --color-abort-hover: var(--abort-hover);
+  --color-abort-active: var(--abort-active);
   --radius-sm: calc(var(--radius) - 1px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 1px);
@@ -62,6 +65,9 @@
   --telemetry: #0b6bcb;
   --nominal: #0f8a5f;
   --caution: #b26a00;
+  --abort: #d10f1b;
+  --abort-hover: #e81a26;
+  --abort-active: #a80a14;
   --star-opacity: 0;
 }
 
@@ -89,6 +95,9 @@
   --telemetry: #4cb2ff;
   --nominal: #3ee0a0;
   --caution: #ffb020;
+  --abort: #e5101d;
+  --abort-hover: #ff2a36;
+  --abort-active: #b80b16;
   --star-opacity: 1;
 }
 

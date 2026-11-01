@@ -170,8 +170,8 @@ async function writeEvidence(file, data) {
   }
 }
 
-async function shot(name) {
-  const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+async function shot(name, clip) {
+  const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', ...(clip && { clip: { ...clip, scale: 1 } }) });
   const file = path.join(out, `${name}.png`);
   await writeEvidence(file, Buffer.from(data, 'base64'));
   console.log(`  screenshot ${file}`);
@@ -411,12 +411,59 @@ async function cardCloseup() {
   check('close button dismisses the close-up', true);
 }
 
+const HEADER_WIDTHS = [1440, 1024, 768, 390];
+
+/** The header's feedback button at each width: full label, centred in the bar, clear of the title and controls. */
+async function headerFeedbackButton() {
+  for (const width of HEADER_WIDTHS) {
+    const mobile = width < 640;
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: mobile ? 844 : 900, deviceScaleFactor: mobile ? 2 : 1, mobile });
+    await sleep(500);
+    const m = await evaluate(`(() => {
+      const bar = document.querySelector('header > div');
+      const btn = bar.querySelector('[aria-label="Submit feedback"]');
+      const [left, , right] = bar.children;
+      const h1 = left.querySelector('h1');
+      const rightContent = [...right.querySelectorAll(':scope > *')].filter((el) => el.getBoundingClientRect().width > 0);
+      const r = (el) => el.getBoundingClientRect();
+      const barR = r(bar), b = r(btn);
+      const text = document.createRange();
+      text.selectNodeContents(h1);
+      const pad = parseFloat(getComputedStyle(bar).paddingLeft);
+      return {
+        label: btn.innerText.trim(),
+        height: b.height,
+        bg: getComputedStyle(btn).backgroundColor,
+        labelFits: btn.scrollWidth <= btn.clientWidth,
+        offCentre: Math.abs((b.left + b.right) / 2 - (barR.left + pad + barR.right - pad) / 2),
+        titleGap: b.left - Math.min(text.getBoundingClientRect().right, r(h1).right),
+        controlsGap: Math.min(...rightContent.map((el) => r(el).left)) - b.right,
+        titleFull: h1.scrollWidth <= h1.clientWidth,
+        buttonWidth: b.width,
+      };
+    })()`);
+    const wide = width >= 1024;
+    check(`${width}px: button reads "${wide ? 'SUBMIT FEEDBACK' : 'FEEDBACK'}" untruncated`, m.label === (wide ? 'SUBMIT FEEDBACK' : 'FEEDBACK') && m.labelFits, m);
+    check(`${width}px: button centred in the header and clear of title and controls`, m.offCentre <= 1 && m.titleGap >= 12 && m.controlsGap >= 12 && m.height >= 40, m);
+    check(`${width}px: title "Subway Times" not truncated`, m.titleFull);
+    await shot(`header-${width}`, { x: 0, y: 0, width, height: 64 });
+  }
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(500);
+  const focused = `document.activeElement?.getAttribute('aria-label') === 'Submit feedback'`;
+  for (let i = 0; i < 6 && !(await evaluate(focused)); i++) await press('Tab');
+  const outline = await evaluate(`(() => { const s = getComputedStyle(document.activeElement); return ${focused} && s.outlineStyle !== 'none' ? s.outlineWidth + ' ' + s.outlineStyle : null; })()`);
+  check('keyboard Tab focuses the button with a visible outline', Boolean(outline), outline);
+  await shot('header-1440-focus', { x: 0, y: 0, width: 1440, height: 72 });
+}
+
 async function feedback() {
   if (state?.webhook !== 'mock') check('local mock webhook configured', false, 'launch without --real-webhook so the payload can be checked');
   const webhookLog = path.join(stateDir, 'webhook.jsonl');
   const before = existsSync(webhookLog) ? readFileSync(webhookLog, 'utf8').split('\n').filter(Boolean).length : 0;
   await goto('/');
-  await click('Send feedback link', '[aria-label="Send feedback"]');
+  await headerFeedbackButton();
+  await click('Submit feedback button', '[aria-label="Submit feedback"]');
   await waitFor('feedback page', `location.pathname === '/feedback' && document.querySelector('#feedback-title')`, 60000);
   const context = 'verify-subway-times: watching Times Sq';
   const message = `Proof run ${stamp}: rocket landed and launched on the 7 pad.`;
