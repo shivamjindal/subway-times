@@ -156,16 +156,24 @@ export interface OrbitalMapPanelHandle {
 interface OrbitalMapPanelProps {
   savedStationIds: string[];
   arrivals: TrainArrival[];
+  /** The map's renderer is held back until arrivals have rendered, so it never competes with them. */
+  arrivalsSettled: boolean;
   onTrackStation: (stationId: string) => void;
   ref?: Ref<OrbitalMapPanelHandle>;
 }
 
-export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref }: OrbitalMapPanelProps) {
+export function OrbitalMapPanel({ savedStationIds, arrivals, arrivalsSettled, onTrackStation, ref }: OrbitalMapPanelProps) {
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   const [contextLost, setContextLost] = useState(false);
   const [sceneKey, setSceneKey] = useState(0);
+  const [mapEl, setMapEl] = useState<HTMLDivElement | null>(null);
+  const [engaged, setEngaged] = useState(false);
+  const sceneReady = useIdleAfter(arrivalsSettled);
+  const releaseEngagement = useCallback(() => setEngaged(false), []);
+  const inView = useInView(mapEl, releaseEngagement);
+  const pageHidden = usePageHidden();
   const reducedMotion = usePrefersReducedMotion();
   const capability = useSyncExternalStore(noopSubscribe, detectCapability, () => null);
   const { resolvedTheme } = useTheme();
@@ -185,10 +193,23 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     }
   };
 
-  const canRender = open && capability?.webgl === true && !contextLost;
+  const canRender = open && sceneReady && capability?.webgl === true && !contextLost;
   // A station card can open the close-up while the map is collapsed, and the close-up still needs the fleet.
-  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null);
+  const telemetry = useTrainTelemetry(((open && sceneReady) || closeupStationId !== null) && capability !== null);
   const { fleet } = telemetry;
+
+  useEffect(() => {
+    if (!engaged) return;
+    const release = (event: KeyboardEvent | PointerEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !mapEl?.contains(event.target as Node)) setEngaged(false);
+    };
+    document.addEventListener('keydown', release);
+    document.addEventListener('pointerdown', release);
+    return () => {
+      document.removeEventListener('keydown', release);
+      document.removeEventListener('pointerdown', release);
+    };
+  }, [engaged, mapEl]);
 
   const selectStation = useCallback((stationId: string | null) => {
     setSelectedStationId(stationId);
@@ -236,6 +257,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     sceneContent = unavailable("This browser or device doesn't support WebGL.");
   } else if (contextLost) {
     sceneContent = unavailable('The graphics context was lost.', retryScene);
+  } else if (!sceneReady) {
+    sceneContent = <SceneStatus label="Standing by" detail="Arrivals first · star map loads next" />;
   } else {
     sceneContent = (
       <SceneErrorBoundary key={sceneKey} fallback={unavailable('The 3D renderer hit an error.', retryScene)}>
@@ -247,7 +270,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
           focusNonce={focusNonce}
           onSelectStation={enterSpaceport}
           onSelectRocket={selectRocket}
-          paused={closeupStationId !== null}
+          paused={closeupStationId !== null || !inView || pageHidden}
+          interactive={engaged}
           perf={perf}
           reducedMotion={reducedMotion}
           lowPower={capability.lowPower}
@@ -259,7 +283,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   }
 
   return (
-    <section className="hud-panel mb-6" aria-labelledby="orbital-map-title">
+    <section className="hud-panel mt-8 mb-6" aria-labelledby="orbital-map-title">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2 sm:px-6">
         <h2 id="orbital-map-title" className="hud-label flex items-center gap-2">
           <Rocket className="h-3 w-3 text-ignition" />
@@ -279,7 +303,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
 
       {open && (
         <div id="orbital-map-body" className="grid lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="relative h-[420px] overflow-hidden sm:h-[560px]">
+          <div ref={setMapEl} className="relative h-[420px] overflow-hidden sm:h-[560px]">
             <div
               className="absolute inset-0"
               {...(canRender && {
@@ -289,6 +313,21 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
             >
               {sceneContent}
             </div>
+            {canRender && !engaged && (
+              <button
+                type="button"
+                onClick={() => setEngaged(true)}
+                onTouchStart={(event) => {
+                  if (event.touches.length > 1) setEngaged(true);
+                }}
+                aria-label="Engage map controls"
+                className="group absolute inset-0 flex items-center justify-center"
+              >
+                <span className="flex items-center gap-2 border bg-card/85 px-3 py-2 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-sm transition-colors group-hover:border-telemetry group-hover:text-telemetry">
+                  <Crosshair className="h-3.5 w-3.5" /> Click to engage · Esc to release
+                </span>
+              </button>
+            )}
             <NetworkTicker fleet={fleet} clockOffset={telemetry.clockOffset} status={telemetry.status} trackedStationIds={savedStationIds} />
             {canRender && (
               <>
@@ -492,6 +531,46 @@ function SelectedStationReadout({
       )}
     </div>
   );
+}
+
+function useIdleAfter(ready: boolean) {
+  const [idle, setIdle] = useState(false);
+  useEffect(() => {
+    if (!ready || idle) return;
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(() => setIdle(true), { timeout: 2000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = setTimeout(() => setIdle(true), 300);
+    return () => clearTimeout(handle);
+  }, [ready, idle]);
+  return idle;
+}
+
+function subscribePageVisibility(callback: () => void) {
+  document.addEventListener('visibilitychange', callback);
+  return () => document.removeEventListener('visibilitychange', callback);
+}
+
+function usePageHidden() {
+  return useSyncExternalStore(subscribePageVisibility, () => document.hidden, () => false);
+}
+
+function useInView(element: HTMLElement | null, onLeave: () => void) {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (!element) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setInView(entry.isIntersecting);
+      if (!entry.isIntersecting) onLeave();
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      setInView(false);
+    };
+  }, [element, onLeave]);
+  return inView;
 }
 
 function useNowSeconds() {

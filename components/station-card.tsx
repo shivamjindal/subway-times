@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, DoorOpen, Rocket, SatelliteDish } from 'lucide-react';
 import { getSpaceport } from '@/lib/spaceports';
+import { isLongAlert } from '@/lib/alert-summary';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 
@@ -32,6 +33,40 @@ function useNowSeconds() {
     return () => clearInterval(interval);
   }, []);
   return now;
+}
+
+function AlertBanner({ alert }: { alert: ServiceAlert }) {
+  const [expanded, setExpanded] = useState(false);
+  const collapsible = isLongAlert(alert);
+  const open = !collapsible || expanded;
+
+  return (
+    <div role="alert" className="border border-caution/40 bg-caution/10 border-l-4 border-l-caution">
+      <div className="flex gap-3 px-3 sm:px-4 py-3">
+        <AlertTriangle className="h-4 w-4 text-caution shrink-0 mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <div className="hud-label !text-caution mb-1.5">Mission advisory · Service alert</div>
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
+              className="flex w-full items-start gap-2 text-left"
+              {...stopDragPropagation}
+            >
+              <span className={`min-w-0 flex-1 text-sm sm:text-base font-medium break-words ${expanded ? '' : 'truncate'}`}>{alert.headerText}</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 mt-0.5 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            </button>
+          ) : (
+            <div className="text-sm sm:text-base font-medium break-words">{alert.headerText}</div>
+          )}
+          {open && alert.descriptionText && (
+            <div className="mt-1 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function formatCountdown(secondsUntilArrival: number) {
@@ -213,20 +248,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           {hasAlerts && (
             <div className="space-y-2">
               {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  role="alert"
-                  className="flex gap-3 border border-caution/40 bg-caution/10 border-l-4 border-l-caution px-3 sm:px-4 py-3"
-                >
-                  <AlertTriangle className="h-4 w-4 text-caution shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="hud-label !text-caution mb-1.5">Mission advisory · Service alert</div>
-                    <div className="text-sm sm:text-base font-medium break-words">{alert.headerText}</div>
-                    {alert.descriptionText && (
-                      <div className="mt-1 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
-                    )}
-                  </div>
-                </div>
+                <AlertBanner key={alert.id} alert={alert} />
               ))}
             </div>
           )}
