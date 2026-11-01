@@ -20,7 +20,7 @@ You can also click a spaceport or rocket on the canvas, which calls the same han
 
 ### From a station card
 
-Every tracked station card has an "Enter spaceport" button (`[aria-label="Enter spaceport: <station>"]`) in its Trajectory row. It calls the map panel's same `enterSpaceport` handler through a ref (`OrbitalMapPanelHandle`), so it opens the same dialog.
+Every saved station card has a "View platforms" button (`[aria-label="View platforms: <station>"]`) in its Direction row. It calls the map panel's same `enterSpaceport` handler through a ref (`OrbitalMapPanelHandle`), so it opens the same dialog.
 
 - The card's stop ID maps to its spaceport with `getSpaceport`. A complex member opens the whole complex: the 42 St-Port Authority (A27) card opens "Times Sq-42 St" with "with 42 St-Port Authority Bus Terminal". 7 Av (D14) is its own 2-pad spaceport.
 - It works with the map collapsed. The panel polls `/api/train-positions` while the close-up is open, even when the map body is hidden.
