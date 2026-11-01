@@ -92,7 +92,7 @@ export function SettingsButton() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry ${isOpen ? 'border-telemetry text-telemetry' : ''}`}
+        className={`h-11 w-11 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry ${isOpen ? 'border-telemetry text-telemetry' : ''}`}
         aria-label="Settings"
         aria-expanded={isOpen}
         title="Systems"

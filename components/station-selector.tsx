@@ -304,7 +304,7 @@ function SortableStationCard({ stationId, station, routes, onRemove, canDrag, is
           e.stopPropagation();
           onRemove(stationId, e);
         }}
-        className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+        className="-my-2 -mr-2 ml-2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
         aria-label={`Remove ${station.name}`}
       >
         <X className="h-4 w-4" />
