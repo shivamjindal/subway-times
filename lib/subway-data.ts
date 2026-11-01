@@ -1,5 +1,6 @@
 import stationToRoutesData from "./station-to-routes.json";
 import routeHeadsignsData from "./route-headsigns.json";
+import { searchStations } from "./station-search";
 
 export interface Station {
   stopId: string;
@@ -47,10 +48,7 @@ export function getSouthboundRoutesForStation(stopId: string): Route[] {
 }
 
 export function searchStationsByName(query: string): StationWithRoutes[] {
-  const lowerQuery = query.toLowerCase();
-  return allStationsWithRoutes.filter((s) =>
-    s.station.name.toLowerCase().includes(lowerQuery)
-  );
+  return searchStations(allStationsWithRoutes, query);
 }
 
 export const ROUTE_LINE_COLORS: Record<string, string> = {
