@@ -94,7 +94,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
       <form onSubmit={handleFormSubmit} className="relative">
         <label htmlFor="station-search" className="hud-label flex items-center gap-2 mb-2">
           <Crosshair className="h-3 w-3 text-telemetry" />
-          Target acquisition · Add a station
+          Add a station
         </label>
         <span className="pointer-events-none absolute z-10 left-4 bottom-0 h-12 flex items-center font-mono text-telemetry">
           &gt;<span className="blink ml-0.5">_</span>
@@ -153,7 +153,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                   <div className="flex items-center justify-between gap-3">
                     <div className="hud-title text-lg font-semibold">{station.name}</div>
                     <span className="hud-label group-hover:text-telemetry">
-                      {isSelected ? 'Tracking' : 'Lock target ↵'}
+                      {isSelected ? 'Added' : 'Add ↵'}
                     </span>
                   </div>
                   <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -304,7 +304,7 @@ function SortableStationCard({ stationId, station, routes, onRemove, canDrag, is
           e.stopPropagation();
           onRemove(stationId, e);
         }}
-        className="ml-2 p-1 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+        className="ml-1 -mr-2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
         aria-label={`Remove ${station.name}`}
       >
         <X className="h-4 w-4" />

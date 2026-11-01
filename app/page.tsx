@@ -6,7 +6,7 @@ import { MessageSquareText, Orbit, RefreshCcw } from 'lucide-react';
 import { SubwayTimesDisplay, type SubwayTimesDisplayRef } from '@/components/subway-times-display';
 import { SettingsButton } from '@/components/settings-button';
 
-function MissionClock() {
+function Clock() {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -16,18 +16,14 @@ function MissionClock() {
     return () => clearInterval(interval);
   }, []);
 
-  const format = (date: Date, timeZone?: string) =>
-    date.toLocaleTimeString('en-US', { hour12: false, timeZone });
+  const format = (date: Date) =>
+    date.toLocaleTimeString('en-US', { hour12: false, timeZone: 'America/New_York' });
 
   return (
     <div className="hidden sm:flex items-center gap-5 font-mono text-xs tabular-nums">
       <div className="text-right">
-        <div className="hud-label">Local · NYC</div>
-        <div className="mt-1 text-foreground">{now ? format(now, 'America/New_York') : '--:--:--'}</div>
-      </div>
-      <div className="text-right">
-        <div className="hud-label">UTC</div>
-        <div className="mt-1 text-muted-foreground">{now ? format(now, 'UTC') : '--:--:--'}</div>
+        <div className="hud-label">NYC time</div>
+        <div className="mt-1 text-foreground">{now ? format(now) : '--:--:--'}</div>
       </div>
     </div>
   );
@@ -54,28 +50,28 @@ export default function Home() {
               <span className="absolute -top-px -right-px h-1.5 w-1.5 bg-ignition" />
             </div>
             <div className="min-w-0">
-              <div className="hud-label truncate">Mission Control // NYC Transit</div>
+              <div className="hud-label truncate">NYC Transit</div>
               <h1 className="hud-title text-2xl font-bold mt-1 truncate">Subway Times</h1>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <MissionClock />
+            <Clock />
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-11 w-11 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Refresh arrivals"
-                title="Resync telemetry"
+                title="Refresh arrivals"
               >
                 <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
               <Link
                 href="/feedback"
-                className="h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry"
+                className="h-11 w-11 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry"
                 aria-label="Send feedback"
-                title="Transmit feedback"
+                title="Send feedback"
               >
                 <MessageSquareText className="h-4 w-4" />
               </Link>

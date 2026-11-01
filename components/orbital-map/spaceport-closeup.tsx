@@ -162,13 +162,13 @@ export function SpaceportCloseup({
         <aside className="overflow-y-auto p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="hud-label flex items-center gap-2">
-              <Rocket className="h-3 w-3 text-ignition" /> Spaceport
+              <Rocket className="h-3 w-3 text-ignition" /> Station
             </div>
             <button
               type="button"
               onClick={() => dialogRef.current?.close()}
-              className="-m-1 p-1 text-muted-foreground hover:text-foreground"
-              aria-label="Close spaceport"
+              className="-m-2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+              aria-label="Close station view"
             >
               <X className="h-4 w-4" />
             </button>
@@ -218,9 +218,9 @@ export function SpaceportCloseup({
             <button
               type="button"
               onClick={() => onTrack(stationId)}
-              className="mt-4 flex items-center gap-1.5 border border-ignition/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-ignition transition-colors hover:bg-ignition/10"
+              className="mt-4 flex min-h-11 items-center gap-1.5 border border-ignition/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-ignition transition-colors hover:bg-ignition/10"
             >
-              <Plus className="h-3.5 w-3.5" /> Track spaceport
+              <Plus className="h-3.5 w-3.5" /> Add station
             </button>
           )}
         </aside>

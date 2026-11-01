@@ -468,7 +468,7 @@ export function manifestByPad(manifest: Manifest, padIds: readonly string[]): Ma
 
 export function formatTMinus(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
-  return `T−${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 /** Seconds of descent shown before touchdown, ignition lead before liftoff, and climb-out after it. */

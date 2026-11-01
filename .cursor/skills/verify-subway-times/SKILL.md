@@ -80,15 +80,15 @@ Each journey's steps and assertions are in `features/<feature>.md`. Stable handl
 | `button[aria-controls=orbital-map-body]` | Collapse / Open network (`localStorage.orbitalMapOpen`) |
 | `#station-search` | search input; Enter locks the first untracked result |
 | `[aria-label="Remove <station>"]` | tracked-station chip (`localStorage.selectedStations`) |
-| `button[aria-pressed]` with station name | "Tracked spaceports" list in the map sidebar |
-| button text `Enter spaceport` | opens the close-up `<dialog>` from the map sidebar |
-| `[aria-label="Enter spaceport: <station>"]` | same close-up, from a station card |
+| `button[aria-pressed]` with station name | "Tracked stations" list in the map sidebar |
+| button text `Station view` | opens the close-up `<dialog>` from the map sidebar |
+| `[aria-label="Open station view: <station>"]` | same close-up, from a station card |
 | `dialog[open] #spaceport-title`, `[data-testid=pad-count]`, `[data-testid=pad-phase]`, `[data-testid=pad-manifest] [data-pad]` | close-up |
-| `[aria-label="Close spaceport"]` | closes the close-up |
+| `[aria-label="Close station view"]` | closes the close-up |
 | `[aria-label="Send feedback"]` → `/feedback`; `#feedback-context`, `#feedback-message`, `button[type=submit]`, `#feedback-sent-title` | feedback |
 | `/?perf=1`, `window.__spaceNetworkPerf` | renderer frame stats (FPS, draws, visible/total rockets) |
 
-Don't click the WebGL canvas to pick a spaceport. Pixel targets move with the camera and the data. Go through search, then "Tracked spaceports", then "Enter spaceport", which is a real user path with stable handles.
+Don't click the WebGL canvas to pick a spaceport. Pixel targets move with the camera and the data. Go through search, then "Tracked stations", then "Station view", which is a real user path with stable handles.
 For APIs, hit them directly against the running app: `curl -s localhost:3100/api/train-positions | head -c 300`, `curl -s 'localhost:3100/api/subway-times?stations=127'`, `curl -s localhost:3100/api/weather`. `/api/weather` calls `api.weather.gov` live; there's no mock.
 
 ## Evidence

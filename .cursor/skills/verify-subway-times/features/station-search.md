@@ -2,10 +2,10 @@
 
 ## Sub-features
 
-- Search box `#station-search` (placeholder "Search for a station (e.g. Times Sq, 7 Av)"). Suggestions show route bullets and "Lock target ↵". Enter locks the first result that isn't already tracked, and IME composition Enter is ignored.
+- Search box `#station-search` (placeholder "Search for a station (e.g. Times Sq, 7 Av)"). Suggestions show route bullets and "Add ↵". Enter locks the first result that isn't already tracked, and IME composition Enter is ignored.
 - Tracked chips (`[aria-label="Remove <name>"]`), drag to reorder and tap to filter when there are 2 or more. They persist in `localStorage.selectedStations` as `[{stationId, direction, selectedRoutes}]`.
 - Station cards (`h2` = station name) list arrivals from `GET /api/subway-times?stations=<ids>` (max 10 IDs, each 1–5 alphanumerics). The cards also have route toggles (`aria-label="Select <route> route"` / `"Deselect …"`), collapse (`aria-label="Collapse station"`), service alerts (`role=alert`), and "Arrives in N minutes" labels.
-- Tracking a station pins a beacon on the map and lists it under "Tracked spaceports".
+- Tracking a station pins a beacon on the map and lists it under "Tracked stations".
 - The header's refresh button (`aria-label="Refresh arrivals"`) refetches arrivals. The weather card (`/api/weather`, NWS) can be toggled in Settings (`aria-label="Settings"`).
 
 ## How to get to it (user POV)

@@ -92,7 +92,7 @@ export function SettingsButton() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry ${isOpen ? 'border-telemetry text-telemetry' : ''}`}
+        className={`h-11 w-11 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry ${isOpen ? 'border-telemetry text-telemetry' : ''}`}
         aria-label="Settings"
         aria-expanded={isOpen}
         title="Systems"
@@ -101,10 +101,10 @@ export function SettingsButton() {
       </button>
 
       {isOpen && (
-        <div className="hud-panel ignite absolute right-0 top-10 mt-2 w-72 bg-popover shadow-2xl shadow-black/50 p-4 z-50">
+        <div className="hud-panel ignite absolute right-0 top-12 mt-2 w-72 bg-popover shadow-2xl shadow-black/50 p-4 z-50">
           <div className="space-y-4">
             <div>
-              <div className="hud-label">Systems Config</div>
+              <div className="hud-label">Preferences</div>
               <h3 className="hud-title text-lg font-semibold mt-1">Settings</h3>
             </div>
             <div className="hud-divider" />

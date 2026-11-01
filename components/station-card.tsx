@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, DoorOpen, Rocket, SatelliteDish } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, DoorOpen, TrainFront, SatelliteDish } from 'lucide-react';
 import { getSpaceport } from '@/lib/spaceports';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
@@ -38,6 +38,28 @@ function formatCountdown(secondsUntilArrival: number) {
   const minutes = Math.floor(secondsUntilArrival / 60);
   const seconds = secondsUntilArrival % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function AlertItem({ alert }: { alert: ServiceAlert }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div role="alert" className="border border-caution/40 bg-caution/10 border-l-4 border-l-caution">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        {...stopDragPropagation}
+        aria-expanded={open}
+        className="flex min-h-11 w-full items-start gap-3 px-3 sm:px-4 py-2.5 text-left"
+      >
+        <AlertTriangle className="h-4 w-4 text-caution shrink-0 mt-0.5" />
+        <span className={`min-w-0 flex-1 text-sm sm:text-base font-medium ${open ? 'break-words' : 'truncate'}`}>{alert.headerText}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 mt-0.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && alert.descriptionText && (
+        <div className="px-3 sm:px-4 pb-3 pl-10 sm:pl-11 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
+      )}
+    </div>
+  );
 }
 
 export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle, onEnterSpaceport }: StationCardProps) {
@@ -88,8 +110,8 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
 
   const directionOptions: Array<{ value: 'all' | 'N' | 'S'; label: string; show: boolean }> = [
     { value: 'all', label: 'All', show: true },
-    { value: 'N', label: `↑ ${northboundLabel}`, show: hasNorthbound },
-    { value: 'S', label: `↓ ${southboundLabel}`, show: hasSouthbound },
+    { value: 'N', label: `Uptown · ${northboundLabel}`, show: hasNorthbound },
+    { value: 'S', label: `Downtown · ${southboundLabel}`, show: hasSouthbound },
   ];
 
   return (
@@ -98,15 +120,14 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
       <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
         <div className="hud-label flex items-center gap-2">
           <span className="text-ignition">■</span>
-          Spaceport · Station {station.stopId}
+          Station {station.stopId}
         </div>
         <div
           className={`flex items-center gap-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase ${hasAlerts ? 'text-caution' : 'text-nominal'}`}
           title={hasAlerts ? 'Service alerts active' : 'No active service alerts'}
         >
           <span className="pulse-dot" />
-          <span className="hidden sm:inline text-muted-foreground">Mission status:</span>
-          {hasAlerts ? `Advisory · ${alerts.length} alert${alerts.length > 1 ? 's' : ''}` : 'Nominal'}
+          {hasAlerts ? `${alerts.length} service alert${alerts.length > 1 ? 's' : ''}` : 'No service alerts'}
         </div>
       </div>
 
@@ -153,7 +174,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
             {...stopDragPropagation}
-            className="h-8 w-8 border flex items-center justify-center hover:border-telemetry hover:text-telemetry transition-colors flex-shrink-0"
+            className="h-11 w-11 border flex items-center justify-center hover:border-telemetry hover:text-telemetry transition-colors flex-shrink-0"
             aria-label={isCollapsed ? 'Expand station' : 'Collapse station'}
           >
             <ChevronsUpDown className={`h-4 w-4 text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
@@ -164,7 +185,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           {/* Direction Filter */}
           {(hasNorthbound || hasSouthbound) && (
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="hud-label">Trajectory</span>
+              <span className="hud-label">Direction</span>
               <div className="inline-flex flex-wrap border divide-x">
                 {directionOptions.filter(o => o.show).map((option) => (
                   <button
@@ -173,7 +194,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                     onClick={() => onDirectionChange(option.value)}
                     {...stopDragPropagation}
                     aria-pressed={direction === option.value}
-                    className={`px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                    className={`min-h-11 px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
                       direction === option.value
                         ? 'bg-foreground text-background'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -192,10 +213,10 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
               {...stopDragPropagation}
               // The card's drag listeners treat Enter/Space as "start drag" and swallow the click.
               onKeyDown={(e) => e.stopPropagation()}
-              aria-label={`Enter spaceport: ${station.name}`}
-              className="ml-auto flex items-center gap-1.5 border border-telemetry/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-telemetry transition-colors hover:bg-telemetry/10"
+              aria-label={`Open station view: ${station.name}`}
+              className="ml-auto flex min-h-11 items-center gap-1.5 border border-telemetry/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-telemetry transition-colors hover:bg-telemetry/10"
             >
-              <DoorOpen className="h-3.5 w-3.5" /> Enter spaceport
+              <DoorOpen className="h-3.5 w-3.5" /> Station view
             </button>
           ) : (
             <span className="ml-auto font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
@@ -213,20 +234,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           {hasAlerts && (
             <div className="space-y-2">
               {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  role="alert"
-                  className="flex gap-3 border border-caution/40 bg-caution/10 border-l-4 border-l-caution px-3 sm:px-4 py-3"
-                >
-                  <AlertTriangle className="h-4 w-4 text-caution shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="hud-label !text-caution mb-1.5">Mission advisory · Service alert</div>
-                    <div className="text-sm sm:text-base font-medium break-words">{alert.headerText}</div>
-                    {alert.descriptionText && (
-                      <div className="mt-1 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
-                    )}
-                  </div>
-                </div>
+                <AlertItem key={alert.id} alert={alert} />
               ))}
             </div>
           )}
@@ -235,14 +243,14 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           {filteredArrivals.length === 0 ? (
             <div className="border border-dashed py-10 text-center">
               <SatelliteDish className="h-6 w-6 mx-auto text-muted-foreground" />
-              <div className="hud-title text-xl font-semibold mt-3">No telemetry</div>
-              <div className="text-sm text-muted-foreground mt-1">No boosters (trains) inbound at this time</div>
+              <div className="hud-title text-xl font-semibold mt-3">No trains</div>
+              <div className="text-sm text-muted-foreground mt-1">No trains coming right now</div>
             </div>
           ) : (
             <div>
               <div className="hidden sm:grid grid-cols-[1fr_auto] gap-4 px-4 pb-2">
-                <span className="hud-label">Booster · Destination</span>
-                <span className="hud-label text-right">T-minus · ETA</span>
+                <span className="hud-label">Train · Destination</span>
+                <span className="hud-label text-right">Arrives in · Due</span>
               </div>
               <ol className="space-y-2">
                 {displayedArrivals.map((arrival, index) => {
@@ -275,11 +283,11 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                         <div className="min-w-0">
                           {isNext && (
                             <div className="hud-label !text-ignition mb-1 flex items-center gap-1.5">
-                              <Rocket className="h-3 w-3" /> Next landing
+                              <TrainFront className="h-3 w-3" /> Next train
                             </div>
                           )}
                           <div className="font-semibold truncate">
-                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? '↑' : '↓'} </span>
+                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? 'Uptown' : 'Downtown'} · </span>
                             {arrival.destination}
                           </div>
                           {arrival.trainId && (
@@ -293,19 +301,18 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                         {isArriving ? (
                           <div className="font-mono text-xl sm:text-2xl font-bold text-ignition uppercase tracking-wider flex items-center justify-end gap-2">
                             <span className="pulse-dot" />
-                            Landing
+                            Arriving
                           </div>
                         ) : (
                           <div
                             className="font-mono text-xl sm:text-2xl font-bold tabular-nums"
                             aria-label={`Arrives in ${Math.floor(secondsLeft / 60)} minutes`}
                           >
-                            <span className="text-muted-foreground font-medium text-base mr-1">T−</span>
                             {formatCountdown(secondsLeft)}
                           </div>
                         )}
                         <div className="font-mono text-xs text-muted-foreground mt-0.5">
-                          ETA {formatTime(arrival.arrivalTime)}
+                          Due {formatTime(arrival.arrivalTime)}
                         </div>
                       </div>
                     </li>
@@ -319,17 +326,17 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                   type="button"
                   onClick={() => setIsExpanded(!isExpanded)}
                   {...stopDragPropagation}
-                  className="mt-3 w-full py-2 border border-dashed font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors flex items-center justify-center gap-2"
+                  className="mt-3 w-full min-h-11 py-2 border border-dashed font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors flex items-center justify-center gap-2"
                 >
                   {isExpanded ? (
                     <>
                       <ChevronUp className="h-4 w-4" />
-                      Collapse manifest
+                      Show fewer trains
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4" />
-                      Show {filteredArrivals.length - INITIAL_TRAINS_TO_SHOW} more boosters
+                      Show {filteredArrivals.length - INITIAL_TRAINS_TO_SHOW} more trains
                     </>
                   )}
                 </button>

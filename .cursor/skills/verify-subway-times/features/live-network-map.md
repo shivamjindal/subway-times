@@ -4,7 +4,7 @@
 
 - A 3D "Space network · Live" panel at the top of `/`. Every train from `/api/train-positions` is a rocket that dwells on its pad, launches, flies an arc, and lands. It polls every 30 s.
 - A ticker (`[data-testid=network-ticker]`) showing counts in flight, landing, holding, and on pad, plus the next launch (at a tracked spaceport if there is one).
-- A sidebar with "No target selected" or "Target locked", "Tracked spaceports", the trajectory legend, and the status line `N rockets tracked (estimated)` (plus `· K feeds offline` when feeds fail).
+- A sidebar with "No target selected" or "Target locked", "Tracked stations", the trajectory legend, and the status line `N rockets tracked (estimated)` (plus `· K feeds offline` when feeds fail).
 - Collapse / Open network, remembered in `localStorage.orbitalMapOpen`.
 - "Overview" resets the camera.
 - `?perf=1` adds a frame-stats overlay and `window.__spaceNetworkPerf`.
@@ -40,4 +40,4 @@ The journey runs these steps:
 - SwiftShader renders at about 5–10 FPS. Don't assert frame rate beyond `> 0`. Real-GPU performance isn't measurable on a cloud VM.
 - Live counts move every poll. A rocket count of about 590 against about 590 trains is typical at 4 pm ET, but assert relationships, never exact numbers.
 - With `--mock`, all rockets follow fixed headways (360 s, or 120 s with `--rush`), so the map looks more regular than live. It doesn't exercise prediction churn.
-- Don't pick spaceports by clicking canvas pixels. Use the "Tracked spaceports" buttons, which call the same `selectStation` / `enterSpaceport` handlers as a canvas click.
+- Don't pick spaceports by clicking canvas pixels. Use the "Tracked stations" buttons, which call the same `selectStation` / `enterSpaceport` handlers as a canvas click.

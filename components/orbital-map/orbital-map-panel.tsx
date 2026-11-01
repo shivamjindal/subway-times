@@ -219,7 +219,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
       </div>
       <div className="hud-label !text-caution">3D network unavailable</div>
       <p className="max-w-sm text-sm text-muted-foreground">
-        {detail} The live ticker, spaceport manifests, and arrivals keep working as normal.
+        {detail} The live ticker, station schedules, and arrivals keep working as normal.
       </p>
       {retry && (
         <button type="button" onClick={retry} className="border px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] hover:border-telemetry hover:text-telemetry">
@@ -319,9 +319,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
             />
 
             <div>
-              <div className="hud-label mb-2">Tracked spaceports</div>
+              <div className="hud-label mb-2">Tracked stations</div>
               {savedStationIds.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Track a spaceport to pin a beacon on the network.</p>
+                <p className="text-xs text-muted-foreground">Add a station to pin a beacon on the network.</p>
               ) : (
                 <ul className="flex flex-wrap gap-1.5">
                   {savedStationIds.map((id) => (
@@ -342,7 +342,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
             </div>
 
             <div>
-              <div className="hud-label mb-2">Trajectories</div>
+              <div className="hud-label mb-2">Lines</div>
               <ul className="grid grid-cols-3 gap-x-3 gap-y-1.5 font-mono text-[0.65rem] tracking-[0.12em]">
                 {LINE_LEGEND.map(({ label, routeId }) => (
                   <li key={label} className="flex items-center gap-1.5">
@@ -361,7 +361,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
                 </span>
                 <span>
                   {telemetry.status === 'loading' && 'Acquiring rocket telemetry…'}
-                  {telemetry.status === 'error' && 'Rocket telemetry unavailable · spaceports only'}
+                  {telemetry.status === 'error' && 'Rocket telemetry unavailable · stations only'}
                   {telemetry.status === 'ok' &&
                     `${telemetry.trains.length} rockets tracked (estimated)${telemetry.failedFeeds > 0 ? ` · ${telemetry.failedFeeds} feed${telemetry.failedFeeds > 1 ? 's' : ''} offline` : ''}`}
                 </span>
@@ -413,7 +413,7 @@ function SelectedStationReadout({
         <div className="hud-label mb-2 flex items-center gap-2">
           <Crosshair className="h-3 w-3 text-telemetry" /> No target selected
         </div>
-        <p className="text-xs text-muted-foreground">Click a spaceport or a rocket to watch its landings and launches up close, or pick a tracked spaceport below.</p>
+        <p className="text-xs text-muted-foreground">Click a station or a train to see its arrivals and departures up close, or pick a tracked station below.</p>
       </div>
     );
   }
@@ -445,7 +445,7 @@ function SelectedStationReadout({
         onClick={() => onEnter(stationId)}
         className="mt-3 flex items-center gap-1.5 border border-telemetry/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-telemetry transition-colors hover:bg-telemetry/10"
       >
-        <DoorOpen className="h-3.5 w-3.5" /> Enter spaceport
+        <DoorOpen className="h-3.5 w-3.5" /> Station view
       </button>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {routes.map((route) => (
@@ -487,7 +487,7 @@ function SelectedStationReadout({
           onClick={() => onTrack(stationId)}
           className="mt-3 flex items-center gap-1.5 border border-ignition/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-ignition transition-colors hover:bg-ignition/10"
         >
-          <Plus className="h-3.5 w-3.5" /> Track spaceport
+          <Plus className="h-3.5 w-3.5" /> Add station
         </button>
       )}
     </div>
