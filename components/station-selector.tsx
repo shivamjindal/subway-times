@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { getStation, getRoutesForStation, getRouteColor, searchStationsByName, type Station } from '@/lib/subway-data';
+import { getStation, getRoutesForStation, getRouteColor, type Station } from '@/lib/subway-data';
+import { fuzzySearchStations, getStationSubtitle } from '@/lib/station-search';
 import { Crosshair, X } from 'lucide-react';
 import {
   DndContext,
@@ -34,7 +35,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    return searchStationsByName(searchQuery.trim()).slice(0, 10);
+    return fuzzySearchStations(searchQuery.trim(), 10);
   }, [searchQuery]);
 
   const handleSelectStation = (stationId: string, e?: React.MouseEvent | React.KeyboardEvent) => {
@@ -151,7 +152,10 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="hud-title text-lg font-semibold">{station.name}</div>
+                    <div className="min-w-0">
+                      <div className="hud-title text-lg font-semibold">{station.name}</div>
+                      <div className="hud-label mt-1 truncate">{getStationSubtitle(stationWithRoutes)}</div>
+                    </div>
                     <span className="hud-label group-hover:text-telemetry">
                       {isSelected ? 'Tracking' : 'Lock target ↵'}
                     </span>
@@ -177,6 +181,17 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                 </button>
               );
             })}
+          </div>
+        )}
+        {showSuggestions && searchQuery.trim() && searchResults.length === 0 && (
+          <div
+            role="status"
+            className="absolute z-20 w-full mt-1 bg-popover border border-telemetry/40 shadow-2xl shadow-black/60 px-4 py-4"
+          >
+            <div className="hud-title text-lg font-semibold">No stations in range</div>
+            <div className="hud-label mt-1">
+              No signal for &ldquo;{searchQuery.trim()}&rdquo;. Try a station name like Grand Central or Times Sq.
+            </div>
           </div>
         )}
       </form>
