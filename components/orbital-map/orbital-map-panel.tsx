@@ -89,6 +89,45 @@ interface TrainTelemetry {
   status: 'loading' | 'ok' | 'error';
 }
 
+/** Holds the 3D scene back until arrivals have rendered and the browser is idle, so Three.js never competes with them. */
+function useSceneGate(arrivalsReady: boolean) {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!arrivalsReady || enabled) return;
+    if ('requestIdleCallback' in window) {
+      const handle = window.requestIdleCallback(() => setEnabled(true), { timeout: 2000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = setTimeout(() => setEnabled(true), 300);
+    return () => clearTimeout(handle);
+  }, [arrivalsReady, enabled]);
+
+  return enabled;
+}
+
+/** True only while the element is on screen and the tab is visible; a hidden map has no reason to draw frames. */
+function useOnScreen(element: HTMLElement | null) {
+  const [intersecting, setIntersecting] = useState(true);
+  const [tabVisible, setTabVisible] = useState(true);
+
+  useEffect(() => {
+    if (!element) return;
+    const observer = new IntersectionObserver(([entry]) => setIntersecting(entry.isIntersecting));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+
+  useEffect(() => {
+    const update = () => setTabVisible(!document.hidden);
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, []);
+
+  return intersecting && tabVisible;
+}
+
 function useTrainTelemetry(enabled: boolean): TrainTelemetry {
   const [telemetry, setTelemetry] = useState<TrainTelemetry>({ trains: [], fleet: EMPTY_FLEET, clockOffset: 0, failedFeeds: 0, status: 'loading' });
 
@@ -156,16 +195,20 @@ export interface OrbitalMapPanelHandle {
 interface OrbitalMapPanelProps {
   savedStationIds: string[];
   arrivals: TrainArrival[];
+  arrivalsReady: boolean;
   onTrackStation: (stationId: string) => void;
   ref?: Ref<OrbitalMapPanelHandle>;
 }
 
-export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref }: OrbitalMapPanelProps) {
+export function OrbitalMapPanel({ savedStationIds, arrivals, arrivalsReady, onTrackStation, ref }: OrbitalMapPanelProps) {
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   const [contextLost, setContextLost] = useState(false);
   const [sceneKey, setSceneKey] = useState(0);
+  const [sceneHost, setSceneHost] = useState<HTMLDivElement | null>(null);
+  const sceneEnabled = useSceneGate(arrivalsReady);
+  const onScreen = useOnScreen(sceneHost);
   const reducedMotion = usePrefersReducedMotion();
   const capability = useSyncExternalStore(noopSubscribe, detectCapability, () => null);
   const { resolvedTheme } = useTheme();
@@ -185,9 +228,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     }
   };
 
-  const canRender = open && capability?.webgl === true && !contextLost;
+  const canRender = open && sceneEnabled && capability?.webgl === true && !contextLost;
   // A station card can open the close-up while the map is collapsed, and the close-up still needs the fleet.
-  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null);
+  const telemetry = useTrainTelemetry(((open && sceneEnabled) || closeupStationId !== null) && capability !== null);
   const { fleet } = telemetry;
 
   const selectStation = useCallback((stationId: string | null) => {
@@ -236,6 +279,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     sceneContent = unavailable("This browser or device doesn't support WebGL.");
   } else if (contextLost) {
     sceneContent = unavailable('The graphics context was lost.', retryScene);
+  } else if (!sceneEnabled) {
+    sceneContent = <SceneStatus label="Plotting trajectories" detail="Arrivals first, then the 3D network…" />;
   } else {
     sceneContent = (
       <SceneErrorBoundary key={sceneKey} fallback={unavailable('The 3D renderer hit an error.', retryScene)}>
@@ -247,7 +292,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
           focusNonce={focusNonce}
           onSelectStation={enterSpaceport}
           onSelectRocket={selectRocket}
-          paused={closeupStationId !== null}
+          paused={closeupStationId !== null || !onScreen}
           perf={perf}
           reducedMotion={reducedMotion}
           lowPower={capability.lowPower}
@@ -279,7 +324,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
 
       {open && (
         <div id="orbital-map-body" className="grid lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="relative h-[420px] overflow-hidden sm:h-[560px]">
+          <div ref={setSceneHost} className="relative h-[420px] overflow-hidden sm:h-[560px]">
             <div
               className="absolute inset-0"
               {...(canRender && {
