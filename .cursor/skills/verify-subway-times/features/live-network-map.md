@@ -6,6 +6,9 @@
 - A ticker (`[data-testid=network-ticker]`) showing counts in flight, landing, holding, and on pad, plus the next launch (at a tracked spaceport if there is one).
 - A sidebar with "No target selected" or "Target locked", "Tracked spaceports", the trajectory legend, and the status line `N rockets tracked (estimated)` (plus `· K feeds offline` when feeds fail).
 - Collapse / Open network, remembered in `localStorage.orbitalMapOpen`.
+- `button[aria-label="3D map"]` (`aria-pressed`) turns only the WebGL scene off, keeping ticker and sidebar; remembered in `localStorage.orbitalMap3d` (`off` / `on`).
+- The scene mounts lazily: after arrivals load, once the map is in view, on an idle callback. Its frame loop stops while the map is offscreen or the tab is hidden.
+- A plain wheel over the map scrolls the page. Ctrl+wheel or pinch zooms; clicking the map engages it (`[data-map-engaged=true]`) so wheel and one-finger drags drive the camera. Leaving the map, clicking outside, or Esc releases it. Hovering shows "Click to interact".
 - "Overview" resets the camera.
 - `?perf=1` adds a frame-stats overlay and `window.__spaceNetworkPerf`.
 - Fallbacks: no WebGL or a lost context shows "3D network unavailable" with "Retry renderer"; the ticker, manifests, and arrivals keep working.
@@ -33,9 +36,8 @@ The journey runs these steps:
 
 ## Gotchas
 
-- **Collapse then reopen shows "3D network unavailable · The graphics context was lost."** This reproduces in dev and prod, on live and mock feeds.
-  - The cause is in `components/orbital-map/orbital-map-scene.tsx` (around line 369). The `webglcontextlost` listener added in `onCreated` is never removed. When collapse unmounts the canvas, R3F force-loses the old context, the listener fires `onContextLost`, and the panel's `contextLost` state survives into the reopened map.
-  - "Retry renderer" recovers it. The bug isn't fixed yet, so `drive.mjs map` fails at "map reopens with rockets" and records the fallback text plus `map-reopened.png`. Don't drop that step.
+- **Collapse (or 3D off) then reopen must show rockets, not "The graphics context was lost."** R3F force-loses the old context after unmounting the canvas; `ContextLossListener` in `orbital-map-scene.tsx` removes its `webglcontextlost` listener on unmount so that isn't mistaken for a real loss. `drive.mjs map` guards this at "map reopens with rockets". Don't drop that step.
+- When clicking the canvas to engage the map, avoid stations: a station click opens the close-up modal, the pointer leaves the map, and engagement is released (correctly).
 - The collapse state persists in `localStorage`. The journey reopens the map, but a crashed run may leave it collapsed in that profile. `drive.mjs` uses a fresh profile per run, so this only bites manual sessions.
 - SwiftShader renders at about 5–10 FPS. Don't assert frame rate beyond `> 0`. Real-GPU performance isn't measurable on a cloud VM.
 - Live counts move every poll. A rocket count of about 590 against about 590 trains is typical at 4 pm ET, but assert relationships, never exact numbers.
