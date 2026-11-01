@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { getStation, getRoutesForStation, getRouteColor, searchStationsByName, type Station } from '@/lib/subway-data';
+import { getStation, getRoutesForStation, getRouteColor, type Station } from '@/lib/subway-data';
+import { searchStations, describeStation } from '@/lib/station-search';
 import { Crosshair, X } from 'lucide-react';
 import {
   DndContext,
@@ -34,7 +35,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    return searchStationsByName(searchQuery.trim()).slice(0, 10);
+    return searchStations(searchQuery.trim()).slice(0, 10);
   }, [searchQuery]);
 
   const handleSelectStation = (stationId: string, e?: React.MouseEvent | React.KeyboardEvent) => {
@@ -156,6 +157,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                       {isSelected ? 'Tracking' : 'Lock target ↵'}
                     </span>
                   </div>
+                  <div className="hud-label mt-1">{describeStation(stationWithRoutes)}</div>
                   <div className="flex gap-1.5 mt-2 flex-wrap">
                     {stationWithRoutes.routes.map((route) => {
                       const color = getRouteColor(route.routeId);
@@ -177,6 +179,15 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                 </button>
               );
             })}
+          </div>
+        )}
+        {showSuggestions && searchQuery.trim() && searchResults.length === 0 && (
+          <div
+            role="status"
+            className="absolute z-20 w-full mt-1 bg-popover border border-telemetry/40 shadow-2xl shadow-black/60 px-4 py-4"
+          >
+            <div className="hud-title text-lg font-semibold">No stations on this orbit</div>
+            <div className="hud-label mt-1">Check spelling or try a line, e.g. &quot;7&quot;</div>
           </div>
         )}
       </form>
