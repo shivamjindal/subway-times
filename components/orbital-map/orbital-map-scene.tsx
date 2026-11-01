@@ -23,6 +23,8 @@ export interface OrbitalMapSceneProps {
   onSelectRocket: (train: EstimatedTrain, stationId: string) => void;
   /** Stops rendering entirely (e.g. while the spaceport close-up is open). */
   paused: boolean;
+  /** Camera input is ignored until the user engages the map, so wheel and touch scrolling pass through to the page. */
+  interactive: boolean;
   /** Shows an FPS / rocket-count readout and mirrors it to window.__spaceNetworkPerf. */
   perf: boolean;
   reducedMotion: boolean;
@@ -272,7 +274,7 @@ function PerfProbe({ statsRef, outputRef }: { statsRef: React.RefObject<NetworkS
   return null;
 }
 
-function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedStationId: string | null; focusNonce: number; reducedMotion: boolean }) {
+function CameraRig({ selectedStationId, focusNonce, reducedMotion, interactive }: { selectedStationId: string | null; focusNonce: number; reducedMotion: boolean; interactive: boolean }) {
   const controlsRef = useRef<ComponentRef<typeof CameraControls>>(null);
   const initialized = useRef(false);
 
@@ -293,6 +295,7 @@ function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedS
     <CameraControls
       ref={controlsRef}
       makeDefault
+      enabled={interactive}
       minDistance={1.2}
       maxDistance={70}
       maxPolarAngle={Math.PI / 2 - 0.12}
@@ -322,6 +325,7 @@ export default function OrbitalMapScene({
   onSelectStation,
   onSelectRocket,
   paused,
+  interactive,
   perf,
   reducedMotion,
   lowPower,
@@ -407,7 +411,7 @@ export default function OrbitalMapScene({
           statsRef={statsRef}
         />
         {perf && <PerfProbe statsRef={statsRef} outputRef={perfOutput} />}
-        <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} />
+        <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} interactive={interactive} />
         <LabelProjector labels={labels} elements={labelElements} />
 
         {bloom && (
