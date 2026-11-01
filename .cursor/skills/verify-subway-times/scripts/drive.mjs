@@ -183,6 +183,7 @@ const mapRockets = `(() => { const m = ${MAP_IMG}?.getAttribute('aria-label').ma
 
 /** The map is usable when the scene's canvas exists, the fleet has rockets, and the ticker shows them. */
 async function waitForMap() {
+  await evaluate(`document.querySelector('#orbital-map-title')?.scrollIntoView({ block: 'center' }); true`);
   const rockets = await waitFor('rockets on the map', `${MAP_IMG}?.querySelector('canvas') && ${mapRockets} > 0 && document.querySelector('[data-testid=network-ticker]') && ${mapRockets}`, 120000);
   check('map canvas mounted with rockets', rockets > 0, `${rockets} rockets`);
   const ticker = await evaluate(`document.querySelector('[data-testid=network-ticker]').textContent`);

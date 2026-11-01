@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useEffect, useImperativeHandle, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
+import { Component, useCallback, useEffect, useImperativeHandle, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
@@ -166,6 +166,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   const [focusNonce, setFocusNonce] = useState(0);
   const [contextLost, setContextLost] = useState(false);
   const [sceneKey, setSceneKey] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [inView, setInView] = useState(false);
+  const [everInView, setEverInView] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const capability = useSyncExternalStore(noopSubscribe, detectCapability, () => null);
   const { resolvedTheme } = useTheme();
@@ -185,9 +188,24 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     }
   };
 
-  const canRender = open && capability?.webgl === true && !contextLost;
+  // The 3D scene mounts only once the panel nears the viewport, and stops drawing whenever it leaves.
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setInView(entry.isIntersecting);
+        if (entry.isIntersecting) setEverInView(true);
+      },
+      { rootMargin: '200px 0px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const canRender = open && everInView && capability?.webgl === true && !contextLost;
   // A station card can open the close-up while the map is collapsed, and the close-up still needs the fleet.
-  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null);
+  const telemetry = useTrainTelemetry(((open && everInView) || closeupStationId !== null) && capability !== null);
   const { fleet } = telemetry;
 
   const selectStation = useCallback((stationId: string | null) => {
@@ -230,8 +248,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   );
 
   let sceneContent: ReactNode;
-  if (!capability) {
-    sceneContent = <SceneStatus label="Checking systems" detail="Probing graphics support…" />;
+  if (!capability || !everInView) {
+    sceneContent = <SceneStatus label="Network holding in orbit" detail="Renderer spins up as this panel scrolls into view…" />;
   } else if (!capability.webgl) {
     sceneContent = unavailable("This browser or device doesn't support WebGL.");
   } else if (contextLost) {
@@ -247,7 +265,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
           focusNonce={focusNonce}
           onSelectStation={enterSpaceport}
           onSelectRocket={selectRocket}
-          paused={closeupStationId !== null}
+          paused={closeupStationId !== null || !inView}
           perf={perf}
           reducedMotion={reducedMotion}
           lowPower={capability.lowPower}
@@ -259,7 +277,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   }
 
   return (
-    <section className="hud-panel mb-6" aria-labelledby="orbital-map-title">
+    <section ref={sectionRef} className="hud-panel mt-6 mb-6" aria-labelledby="orbital-map-title">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2 sm:px-6">
         <h2 id="orbital-map-title" className="hud-label flex items-center gap-2">
           <Rocket className="h-3 w-3 text-ignition" />

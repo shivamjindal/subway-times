@@ -86,7 +86,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [weatherCardVisible, setWeatherCardVisible] = useState(true);
-  const [filteredStationIds, setFilteredStationIds] = useState<string[]>([]);
   const hasDataRef = useRef(false);
   const mapRef = useRef<OrbitalMapPanelHandle>(null);
 
@@ -308,26 +307,11 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
       return existing || { stationId: id, direction: 'all', selectedRoutes: [] };
     });
     setStationConfigs(newConfigs);
-
-    setFilteredStationIds(prev => prev.filter(id => stationIds.includes(id)));
   };
 
-  const handleStationFilterToggle = (stationId: string) => {
-    setFilteredStationIds(prev => {
-      const isSelected = prev.includes(stationId);
-      
-      // Calculate new filtered stations after toggle
-      const newFiltered = isSelected
-        ? prev.filter(id => id !== stationId)
-        : [...prev, stationId];
-      
-      // If all stations are selected, reset to default (empty array = show all)
-      const allStationIds = stationConfigs.map(c => c.stationId);
-      const shouldReset = newFiltered.length === allStationIds.length && 
-                          allStationIds.every(id => newFiltered.includes(id));
-      
-      return shouldReset ? [] : newFiltered;
-    });
+  const handleStationJump = (stationId: string) => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById(stationCardId(stationId))?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
   };
 
   const handleDirectionChange = (stationId: string, direction: 'all' | 'N' | 'S') => {
@@ -434,42 +418,67 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
     return grouped;
   }, [data, stationConfigs]);
 
-  const visibleStationConfigs = useMemo(() => {
-    if (filteredStationIds.length === 0) {
-      return stationConfigs;
-    }
-
-    const filteredSet = new Set(filteredStationIds);
-    return stationConfigs.filter((config) => filteredSet.has(config.stationId));
-  }, [filteredStationIds, stationConfigs]);
-
-  const visibleStationIds = useMemo(
-    () => visibleStationConfigs.map((config) => config.stationId),
-    [visibleStationConfigs]
-  );
-
   return (
     <div className="container mx-auto p-4 max-w-6xl">
-      <OrbitalMapPanel
-        ref={mapRef}
-        savedStationIds={selectedStationIds}
-        arrivals={data?.arrivals ?? []}
-        onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
-      />
-
       {/* Station Selector */}
       <div className="mb-6">
         <StationSelector
           selectedStations={selectedStationIds}
           onStationsChange={handleStationsChange}
-          filteredStations={filteredStationIds}
-          onStationFilterToggle={handleStationFilterToggle}
+          onStationJump={handleStationJump}
         />
       </div>
 
+      {/* Station Cards */}
+      {loading ? (
+        <div className="space-y-4">
+          <AcquiringSignal label="Acquiring signal" detail="Establishing uplink with MTA real-time feeds…" />
+          <Skeleton className="h-56 w-full" />
+          <Skeleton className="h-56 w-full" />
+        </div>
+      ) : error ? (
+        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
+          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <div className="hud-label !text-destructive mt-5">Telemetry error · Signal lost</div>
+          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
+          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
+          <p className="text-sm text-muted-foreground mt-4">Use the resync button in the top bar to try again.</p>
+        </div>
+      ) : selectedStationIds.length === 0 ? (
+        <AwaitingMission />
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={selectedStationIds}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-5">
+              {stationConfigs.map((config) => (
+                <SortableStationCard
+                  key={config.stationId}
+                  config={config}
+                  arrivals={arrivalsByStation[config.stationId] || []}
+                  alerts={alertsByStation[config.stationId] || []}
+                  onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
+                  onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                  onEnterSpaceport={() => mapRef.current?.enterSpaceport(config.stationId)}
+                  showDragHandle={stationConfigs.length > 1}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
       {/* Weather Section */}
       {weatherCardVisible && (
-        <>
+        <div className="mt-6">
           {weatherLoading ? (
             <div className="mb-6">
               <AcquiringSignal compact label="Acquiring atmospheric data" detail="Contacting National Weather Service…" />
@@ -558,55 +567,15 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
               </div>
             </section>
           ) : null}
-        </>
+        </div>
       )}
 
-      {/* Station Cards */}
-      {loading ? (
-        <div className="space-y-4">
-          <AcquiringSignal label="Acquiring signal" detail="Establishing uplink with MTA real-time feeds…" />
-          <Skeleton className="h-56 w-full" />
-          <Skeleton className="h-56 w-full" />
-        </div>
-      ) : error ? (
-        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
-          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
-            <AlertCircle className="h-6 w-6 text-destructive" />
-          </div>
-          <div className="hud-label !text-destructive mt-5">Telemetry error · Signal lost</div>
-          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
-          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
-          <p className="text-sm text-muted-foreground mt-4">Use the resync button in the top bar to try again.</p>
-        </div>
-      ) : selectedStationIds.length === 0 ? (
-        <AwaitingMission />
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={visibleStationIds}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-5">
-              {visibleStationConfigs.map((config) => (
-                <SortableStationCard
-                  key={config.stationId}
-                  config={config}
-                  arrivals={arrivalsByStation[config.stationId] || []}
-                  alerts={alertsByStation[config.stationId] || []}
-                  onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
-                  onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
-                  onEnterSpaceport={() => mapRef.current?.enterSpaceport(config.stationId)}
-                  showDragHandle={stationConfigs.length > 1}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
+      <OrbitalMapPanel
+        ref={mapRef}
+        savedStationIds={selectedStationIds}
+        arrivals={data?.arrivals ?? []}
+        onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
+      />
 
       {/* Last Updated */}
       {data && selectedStationIds.length > 0 && (
@@ -637,6 +606,8 @@ interface SortableStationCardProps {
   showDragHandle: boolean;
 }
 
+const stationCardId = (stationId: string) => `station-card-${stationId}`;
+
 function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRouteToggle, onEnterSpaceport, showDragHandle }: SortableStationCardProps) {
   const {
     attributes,
@@ -657,7 +628,8 @@ function SortableStationCard({ config, arrivals, alerts, onDirectionChange, onRo
     <div 
       ref={setNodeRef} 
       style={style} 
-      className="w-full"
+      id={stationCardId(config.stationId)}
+      className="w-full scroll-mt-20"
     >
       <div 
         className={showDragHandle ? "cursor-grab active:cursor-grabbing" : ""}
