@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { getStation, getRoutesForStation, getRouteColor, searchStationsByName, type Station } from '@/lib/subway-data';
+import { useState, useMemo, useEffect } from 'react';
+import { getStation, getRoutesForStation, getRouteColor, type Station } from '@/lib/subway-data';
+import { getStationBorough, searchStations } from '@/lib/station-search';
 import { Crosshair, X } from 'lucide-react';
 import {
   DndContext,
@@ -31,11 +32,15 @@ interface StationSelectorProps {
 export function StationSelector({ selectedStations, onStationsChange, filteredStations = [], onStationFilterToggle }: StationSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    return searchStationsByName(searchQuery.trim()).slice(0, 10);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 150);
+    return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const searchResults = useMemo(() => searchStations(debouncedQuery), [debouncedQuery]);
+  const isSettled = debouncedQuery === searchQuery;
 
   const handleSelectStation = (stationId: string, e?: React.MouseEvent | React.KeyboardEvent) => {
     e?.preventDefault();
@@ -113,7 +118,9 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
             if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
               e.preventDefault();
               e.stopPropagation();
-              const target = searchResults.find(r => !selectedStations.includes(r.station.stopId));
+              // Enter can land inside the debounce window, so match the text as typed.
+              const results = isSettled ? searchResults : searchStations(searchQuery);
+              const target = results.find(r => !selectedStations.includes(r.station.stopId));
               if (target) handleSelectStation(target.station.stopId, e);
             }
           }}
@@ -156,7 +163,10 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                       {isSelected ? 'Tracking' : 'Lock target ↵'}
                     </span>
                   </div>
-                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    {getStationBorough(station.stopId) && (
+                      <span className="hud-label mr-1">{getStationBorough(station.stopId)}</span>
+                    )}
                     {stationWithRoutes.routes.map((route) => {
                       const color = getRouteColor(route.routeId);
                       return (
@@ -177,6 +187,15 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                 </button>
               );
             })}
+          </div>
+        )}
+        {showSuggestions && isSettled && searchQuery.trim() && searchResults.length === 0 && (
+          <div
+            role="status"
+            className="absolute z-20 w-full mt-1 bg-popover border border-telemetry/40 shadow-2xl shadow-black/60 px-4 py-3"
+          >
+            <div className="hud-title text-lg font-semibold">No stations found</div>
+            <div className="hud-label mt-1">Check the spelling or try a street number, e.g. 42 St</div>
           </div>
         )}
       </form>
