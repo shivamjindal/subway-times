@@ -94,7 +94,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
       <form onSubmit={handleFormSubmit} className="relative">
         <label htmlFor="station-search" className="hud-label flex items-center gap-2 mb-2">
           <Crosshair className="h-3 w-3 text-telemetry" />
-          Target acquisition · Add a station
+          Find a station to save
         </label>
         <span className="pointer-events-none absolute z-10 left-4 bottom-0 h-12 flex items-center font-mono text-telemetry">
           &gt;<span className="blink ml-0.5">_</span>
@@ -153,7 +153,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                   <div className="flex items-center justify-between gap-3">
                     <div className="hud-title text-lg font-semibold">{station.name}</div>
                     <span className="hud-label group-hover:text-telemetry">
-                      {isSelected ? 'Tracking' : 'Lock target ↵'}
+                      {isSelected ? 'Saved' : 'Save station ↵'}
                     </span>
                   </div>
                   <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -193,7 +193,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
             strategy={horizontalListSortingStrategy}
           >
             <div className="hud-label mb-2 mt-1">
-              Tracking {selectedStationData.length} station{selectedStationData.length > 1 ? 's' : ''}
+              {selectedStationData.length} saved station{selectedStationData.length > 1 ? 's' : ''}
               {onStationFilterToggle && selectedStationData.length > 1 && ' · tap to filter, drag to reorder'}
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">

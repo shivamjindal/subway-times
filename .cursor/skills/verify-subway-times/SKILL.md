@@ -66,7 +66,7 @@ Healthy live output ends with `HEALTHY · live feed · http://localhost:3100`.
 ## Drive
 
 ```bash
-node .cursor/skills/verify-subway-times/scripts/drive.mjs <ready|map|search|closeup|card-closeup|feedback> --port 3100
+node .cursor/skills/verify-subway-times/scripts/drive.mjs <ready|map|search|closeup|card-closeup|home|feedback> --port 3100
 ```
 
 `drive.mjs` starts its own headless Chrome (`--use-angle=swiftshader --enable-unsafe-swiftshader`, 1440×1000) with a throwaway profile, talks CDP over Node's `WebSocket`, and kills Chrome on exit.
@@ -82,7 +82,7 @@ Each journey's steps and assertions are in `features/<feature>.md`. Stable handl
 | `[aria-label="Remove <station>"]` | tracked-station chip (`localStorage.selectedStations`) |
 | `button[aria-pressed]` with station name | "Tracked spaceports" list in the map sidebar |
 | button text `Enter spaceport` | opens the close-up `<dialog>` from the map sidebar |
-| `[aria-label="Enter spaceport: <station>"]` | same close-up, from a station card |
+| `[aria-label="View platforms: <station>"]` | same close-up, from a station card |
 | `dialog[open] #spaceport-title`, `[data-testid=pad-count]`, `[data-testid=pad-phase]`, `[data-testid=pad-manifest] [data-pad]` | close-up |
 | `[aria-label="Close spaceport"]` | closes the close-up |
 | `[aria-label="Send feedback"]` → `/feedback`; `#feedback-context`, `#feedback-message`, `button[type=submit]`, `#feedback-sent-title` | feedback |
@@ -117,7 +117,7 @@ It archives `state.json`, the logs, and `webhook.jsonl` to `/opt/cursor/artifact
 |---|---|
 | `scripts/launch.sh` | `.cursor/skills/verify-subway-times/scripts/launch.sh [--port 3100] [--prod] [--mock \| --rush] [--real-webhook]` |
 | `scripts/doctor.mjs` | `node .cursor/skills/verify-subway-times/scripts/doctor.mjs [--port 3100] [--json]` |
-| `scripts/drive.mjs` | `node .cursor/skills/verify-subway-times/scripts/drive.mjs <ready\|map\|search\|closeup\|card-closeup\|feedback> [--port 3100] [--out DIR]` |
+| `scripts/drive.mjs` | `node .cursor/skills/verify-subway-times/scripts/drive.mjs <ready\|map\|search\|closeup\|card-closeup\|home\|feedback> [--port 3100] [--out DIR]` |
 | `scripts/cleanup.sh` | `.cursor/skills/verify-subway-times/scripts/cleanup.sh [--port 3100]` |
 | `scripts/mock-mta.mjs` | `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON .cursor/skills/verify-subway-times/scripts/mock-mta.mjs --port 3901 [--rush \| --headway 360]` |
 | `scripts/mock-webhook.mjs` | `node .cursor/skills/verify-subway-times/scripts/mock-webhook.mjs --port 3902 --log webhook.jsonl [--fail]` |

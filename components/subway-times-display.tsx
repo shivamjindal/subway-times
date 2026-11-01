@@ -450,13 +450,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
 
   return (
     <div className="container mx-auto p-4 max-w-6xl">
-      <OrbitalMapPanel
-        ref={mapRef}
-        savedStationIds={selectedStationIds}
-        arrivals={data?.arrivals ?? []}
-        onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
-      />
-
       {/* Station Selector */}
       <div className="mb-6">
         <StationSelector
@@ -467,18 +460,88 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
         />
       </div>
 
+      {/* Station Cards */}
+      {loading ? (
+        <div className="space-y-4">
+          <AcquiringSignal label="Loading arrivals" detail="Getting real-time train times from the MTA…" />
+          <Skeleton className="h-56 w-full" />
+          <Skeleton className="h-56 w-full" />
+        </div>
+      ) : error ? (
+        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
+          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <div className="hud-label !text-destructive mt-5">Connection problem</div>
+          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
+          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
+          <p className="text-sm text-muted-foreground mt-4">Use the refresh button in the top bar to try again.</p>
+        </div>
+      ) : selectedStationIds.length === 0 ? (
+        <AwaitingMission />
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={visibleStationIds}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-5">
+              {visibleStationConfigs.map((config) => (
+                <SortableStationCard
+                  key={config.stationId}
+                  config={config}
+                  arrivals={arrivalsByStation[config.stationId] || []}
+                  alerts={alertsByStation[config.stationId] || []}
+                  onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
+                  onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
+                  onEnterSpaceport={() => mapRef.current?.enterSpaceport(config.stationId)}
+                  showDragHandle={stationConfigs.length > 1}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
+      {/* Last Updated */}
+      {data && selectedStationIds.length > 0 && (
+        <div className="mt-8 flex items-center justify-center gap-3 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground">
+          <span className={refreshing ? 'text-telemetry' : 'text-nominal'}>
+            <span className="pulse-dot" />
+          </span>
+          <span>
+            Updated {new Date(data.lastUpdated * 1000).toLocaleTimeString()}
+          </span>
+          <span className="text-border">|</span>
+          <span>{refreshing ? <span className="text-telemetry">Refreshing…</span> : 'Refreshes every 30s'}</span>
+        </div>
+      )}
+
+      <div className="mt-10">
+        <OrbitalMapPanel
+          ref={mapRef}
+          savedStationIds={selectedStationIds}
+          arrivals={data?.arrivals ?? []}
+          onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
+        />
+      </div>
+
       {/* Weather Section */}
       {weatherCardVisible && (
         <>
           {weatherLoading ? (
             <div className="mb-6">
-              <AcquiringSignal compact label="Acquiring atmospheric data" detail="Contacting National Weather Service…" />
+              <AcquiringSignal compact label="Loading weather" detail="Contacting National Weather Service…" />
             </div>
           ) : weatherError ? (
             <div className="mb-6">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle className="font-mono text-xs uppercase tracking-[0.18em]">Weather uplink lost</AlertTitle>
+                <AlertTitle className="font-mono text-xs uppercase tracking-[0.18em]">Weather unavailable</AlertTitle>
                 <AlertDescription>{weatherError}</AlertDescription>
               </Alert>
             </div>
@@ -487,7 +550,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
               <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
                 <div className="hud-label flex items-center gap-2">
                   <Satellite className="h-3 w-3 text-telemetry" />
-                  Atmospheric conditions · NYC
+                  NYC weather
                 </div>
                 <div className="hud-label">Weather</div>
               </div>
@@ -561,66 +624,6 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
         </>
       )}
 
-      {/* Station Cards */}
-      {loading ? (
-        <div className="space-y-4">
-          <AcquiringSignal label="Acquiring signal" detail="Establishing uplink with MTA real-time feeds…" />
-          <Skeleton className="h-56 w-full" />
-          <Skeleton className="h-56 w-full" />
-        </div>
-      ) : error ? (
-        <div role="alert" className="hud-panel hud-panel-accent ignite px-6 py-10 text-center">
-          <div className="mx-auto h-14 w-14 border border-destructive/50 flex items-center justify-center">
-            <AlertCircle className="h-6 w-6 text-destructive" />
-          </div>
-          <div className="hud-label !text-destructive mt-5">Telemetry error · Signal lost</div>
-          <h2 className="hud-title text-3xl font-bold mt-2">Unable to load arrivals</h2>
-          <p className="font-mono text-sm text-muted-foreground mt-3 break-words">{error}</p>
-          <p className="text-sm text-muted-foreground mt-4">Use the resync button in the top bar to try again.</p>
-        </div>
-      ) : selectedStationIds.length === 0 ? (
-        <AwaitingMission />
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={visibleStationIds}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-5">
-              {visibleStationConfigs.map((config) => (
-                <SortableStationCard
-                  key={config.stationId}
-                  config={config}
-                  arrivals={arrivalsByStation[config.stationId] || []}
-                  alerts={alertsByStation[config.stationId] || []}
-                  onDirectionChange={(dir) => handleDirectionChange(config.stationId, dir)}
-                  onRouteToggle={(routeId) => handleRouteToggle(config.stationId, routeId)}
-                  onEnterSpaceport={() => mapRef.current?.enterSpaceport(config.stationId)}
-                  showDragHandle={stationConfigs.length > 1}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
-
-      {/* Last Updated */}
-      {data && selectedStationIds.length > 0 && (
-        <div className="mt-8 flex items-center justify-center gap-3 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground">
-          <span className={refreshing ? 'text-telemetry' : 'text-nominal'}>
-            <span className="pulse-dot" />
-          </span>
-          <span>
-            Last telemetry sync {new Date(data.lastUpdated * 1000).toLocaleTimeString()}
-          </span>
-          <span className="text-border">|</span>
-          <span>{refreshing ? <span className="text-telemetry">Syncing…</span> : 'Auto-sync 30s'}</span>
-        </div>
-      )}
     </div>
   );
 });
@@ -713,13 +716,13 @@ function AwaitingMission() {
         </div>
         <Orbit className="absolute inset-0 m-auto h-8 w-8 text-foreground/70" />
       </div>
-      <div className="hud-label mt-8">Standby · No stations tracked</div>
-      <h2 className="hud-title text-3xl sm:text-4xl font-bold mt-2">Awaiting mission parameters</h2>
+      <div className="hud-label mt-8">No saved stations</div>
+      <h2 className="hud-title text-3xl sm:text-4xl font-bold mt-2">Save a station to see its next trains</h2>
       <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto">
-        Search for a station above to start tracking live train arrivals. Add as many as you like and drag to reorder.
+        Search for a station above and save it. Saved stations stay on this device, no sign-in needed. Add as many as you like and drag to reorder.
       </p>
       <div className="mt-6 inline-flex items-center gap-2 font-mono text-[0.7rem] uppercase tracking-[0.18em] text-ignition">
-        <Rocket className="h-3.5 w-3.5" /> Ready for launch
+        <Rocket className="h-3.5 w-3.5" /> Ready when you are
       </div>
     </div>
   );

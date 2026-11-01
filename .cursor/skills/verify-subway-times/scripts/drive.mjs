@@ -4,7 +4,7 @@
 //
 //   node .cursor/skills/verify-subway-times/scripts/drive.mjs <journey> [--port 3100] [--out DIR]
 //
-// Journeys: ready | map | search | closeup | feedback
+// Journeys: ready | map | search | closeup | card-closeup | home | feedback
 // Evidence: $EVIDENCE_ROOT (default /opt/cursor/artifacts/verify-subway-times)/<journey>-<UTC stamp>/
 //   *.png screenshots, report.json (every check, pass/fail), network.json (/api/* traffic), console.json.
 // Exit code 1 if any check fails. Chrome is started per run and always killed before exit.
@@ -27,7 +27,7 @@ const out = arg('--out', path.join(process.env.EVIDENCE_ROOT ?? '/opt/cursor/art
 const CHROME = process.env.CHROME_BIN ?? 'google-chrome';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const JOURNEYS = { ready, map, search, closeup, 'card-closeup': cardCloseup, feedback };
+const JOURNEYS = { ready, map, search, closeup, 'card-closeup': cardCloseup, home, feedback };
 if (!JOURNEYS[journey]) {
   console.error(`usage: drive.mjs <${Object.keys(JOURNEYS).join('|')}> [--port N] [--out DIR]`);
   process.exit(2);
@@ -302,7 +302,7 @@ async function closeup() {
   check('close button dismisses the close-up', true);
 }
 
-/** Track a station by search, clicking the suggestion whose text (name + lines) matches, e.g. "7 AvLock target ↵BDE". */
+/** Track a station by search, clicking the suggestion whose text (name + lines) matches, e.g. "7 AvSave station ↵BDE". */
 async function trackStation(query, suggestionText, name) {
   await click('station search', '#station-search');
   await evaluate(`document.querySelector('#station-search').select(); true`);
@@ -315,7 +315,7 @@ async function trackStation(query, suggestionText, name) {
 
 // `open` drops synchronously on close, but the `close` event that unmounts the close-up fires a task later.
 const CLOSEUP_GONE = `!document.querySelector('#spaceport-title')`;
-const cardButton = (name) => `[aria-label="Enter spaceport: ${name}"]`;
+const cardButton = (name) => `[aria-label="View platforms: ${name}"]`;
 
 async function assertCloseup(label, title, stationsWith) {
   const got = await waitFor('close-up dialog', `document.querySelector('dialog[open] #spaceport-title')?.textContent`, 60000);
@@ -338,17 +338,17 @@ async function cardCloseup() {
   await evaluate(`localStorage.removeItem('selectedStations'); localStorage.removeItem('orbitalMapOpen'); true`);
   await goto('/');
   await waitForMap();
-  await trackStation('7 Av', '7 AvLock target ↵BDE', '7 Av');
+  await trackStation('7 Av', '7 AvSave station ↵BDE', '7 Av');
   await trackStation('42 St-Port', '42 St-Port Authority', '42 St-Port Authority Bus Terminal');
   const saved = await evaluate(`localStorage.getItem('selectedStations')`);
   check('both stations tracked', /"D14"/.test(saved ?? '') && /"A27"/.test(saved ?? ''), saved);
-  const cards = await evaluate(`[...document.querySelectorAll('section.hud-panel')].filter((s) => s.querySelector('h2.hud-title')).map((s) => ({ name: s.querySelector('h2').textContent, button: Boolean(s.querySelector('[aria-label^="Enter spaceport: "]')) }))`);
-  check('every station card has Enter spaceport', cards.length === 2 && cards.every((c) => c.button), cards);
+  const cards = await evaluate(`[...document.querySelectorAll('section.hud-panel')].filter((s) => s.querySelector('h2.hud-title')).map((s) => ({ name: s.querySelector('h2').textContent, button: Boolean(s.querySelector('[aria-label^="View platforms: "]')) }))`);
+  check('every station card has View platforms', cards.length === 2 && cards.every((c) => c.button), cards);
 
   // Mouse, plain station: 7 Av (D14) is its own spaceport.
   await evaluate(`document.querySelector('${cardButton('7 Av')}').closest('section').scrollIntoView({ block: 'center' }); true`);
   await shot('card-button-desktop');
-  await click('card Enter spaceport: 7 Av', cardButton('7 Av'));
+  await click('card View platforms: 7 Av', cardButton('7 Av'));
   await assertCloseup('7 Av card', '7 Av');
   await sleep(2000);
   await shot('closeup-desktop');
@@ -357,7 +357,7 @@ async function cardCloseup() {
 
   // Keyboard, complex member: 42 St-Port Authority (A27) opens the whole Times Sq complex.
   const a27 = cardButton('42 St-Port Authority Bus Terminal');
-  await evaluate(`[...document.querySelector('${a27}').closest('section').querySelectorAll('button[aria-pressed]')].filter((b) => /^[↑↓]|^All$/.test(b.textContent)).at(-1).focus(); true`);
+  await evaluate(`[...document.querySelector('${a27}').closest('section').querySelectorAll('button[aria-pressed]')].filter((b) => /^(Uptown|Downtown)|^All$/.test(b.textContent)).at(-1).focus(); true`);
   await press('Tab');
   check('Tab reaches the card button', await evaluate(`document.activeElement === document.querySelector('${a27}')`));
   await press('Enter');
@@ -382,7 +382,7 @@ async function cardCloseup() {
   await waitFor('7 Av card after reload', `document.querySelector('${cardButton('7 Av')}')`, 60000);
   await sleep(2000);
   check('collapsed map: no telemetry polled before the click', polls().length === pollsAtReload, `${polls().length - pollsAtReload} requests`);
-  await click('card Enter spaceport: 7 Av (map collapsed)', cardButton('7 Av'));
+  await click('card View platforms: 7 Av (map collapsed)', cardButton('7 Av'));
   let polled = null;
   for (let i = 0; i < 120 && !polled; i++, await sleep(250)) polled = polls().slice(pollsAtReload).find((n) => n.status);
   check('collapsed map: card click fetches rocket telemetry', polled?.status === 200, polled ? `${polled.status} ${polled.url}` : 'no request');
@@ -398,7 +398,7 @@ async function cardCloseup() {
   const fits = await evaluate(`(() => { const r = document.querySelector('${cardButton('7 Av')}').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth ? r.width : null; })()`);
   check('mobile: card button fits the viewport', Boolean(fits), `${fits}px wide at 390px`);
   await shot('card-button-mobile');
-  await click('mobile card Enter spaceport: 7 Av', cardButton('7 Av'));
+  await click('mobile card View platforms: 7 Av', cardButton('7 Av'));
   await assertCloseup('7 Av card, mobile', '7 Av');
   await sleep(1500);
   await shot('closeup-mobile');
@@ -409,6 +409,43 @@ async function cardCloseup() {
   await click('Close spaceport', 'dialog[open] [aria-label="Close spaceport"]');
   await waitFor('close-up unmounted', CLOSEUP_GONE);
   check('close button dismisses the close-up', true);
+}
+
+/** Saved stations and their arrivals lead the home page; map and weather sit below. Matches suggestions by route bullets only. */
+async function home() {
+  await goto('/');
+  await evaluate(`localStorage.removeItem('selectedStations'); true`);
+  await goto('/');
+  await waitFor('search box', `document.querySelector('#station-search')`);
+  await trackStation('Times Sq', '123', 'Times Sq-42 St');
+  await trackStation('Grand Central', '4566X', 'Grand Central-42 St');
+  await waitFor('arrival rows', `document.querySelectorAll('section.hud-panel ol li').length > 0`, 60000);
+  await sleep(1500);
+  await evaluate(`scrollTo(0, 0); true`);
+  await shot('home-top');
+  const { height } = await evaluate(`({ height: document.documentElement.scrollHeight })`);
+  const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: 1440, height, scale: 1 } });
+  await writeEvidence(path.join(out, 'home-full.png'), Buffer.from(data, 'base64'));
+  // captureBeyondViewport leaves the layout viewport stretched, which throws off later click coordinates.
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await sleep(500);
+  await evaluate(`document.querySelector('[aria-label="Remove Grand Central-42 St"]') && [...document.querySelectorAll('section.hud-panel h2')].find((h) => h.textContent === 'Grand Central-42 St').closest('section').scrollIntoView({ block: 'start' }); scrollBy(0, -80); true`);
+  await shot('home-station-card');
+  const alertToggle = 'section.hud-panel [role=alert] button[aria-expanded=false]';
+  if (await evaluate(`Boolean(document.querySelector('${alertToggle}'))`)) {
+    const collapsedHeight = await evaluate(`document.querySelector('${alertToggle}').closest('[role=alert]').offsetHeight`);
+    await click('Show details on a service alert', alertToggle, 'Show details');
+    const expanded = await waitFor('alert expanded', `(() => { const b = document.querySelector('section.hud-panel [role=alert] button[aria-expanded=true]'); return b ? b.closest('[role=alert]').offsetHeight : null; })()`);
+    check('long service alert starts collapsed and expands on demand', expanded > collapsedHeight, { collapsedHeight, expanded });
+    await shot('home-alert-expanded');
+  } else {
+    check('no service alerts on saved stations right now (collapse not exercised)', true);
+  }
+  const order = await evaluate(`(() => { const card = document.querySelector('section.hud-panel ol'); const map = ${MAP_IMG} ?? document.querySelector('button[aria-controls=orbital-map-body]'); return { card: card?.getBoundingClientRect().top, map: map?.getBoundingClientRect().top }; })()`);
+  check('saved station arrivals render above the 3D map', order.card < order.map, order);
+  await goto('/');
+  await waitFor('saved stations after reload', `document.querySelector('[aria-label="Remove Times Sq-42 St"]') && document.querySelector('[aria-label="Remove Grand Central-42 St"]')`, 30000);
+  check('saved stations persist across reload without sign-in', /"127".*"631"/.test((await evaluate(`localStorage.getItem('selectedStations')`)) ?? ''));
 }
 
 async function feedback() {
