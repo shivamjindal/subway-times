@@ -3,7 +3,7 @@
 import { Component, useCallback, useEffect, useImperativeHandle, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
-import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
+import { Box, ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
 import { getPad, getSpaceport } from '@/lib/spaceports';
 import { getRouteColor, getRoutesForStation, getStation } from '@/lib/subway-data';
 import { formatArrivalTime, type TrainArrival } from '@/lib/subway-parser';
@@ -17,6 +17,8 @@ const OrbitalMapScene = dynamic(() => import('./orbital-map-scene'), {
 });
 
 const OPEN_STORAGE_KEY = 'orbitalMapOpen';
+const SCENE_STORAGE_KEY = 'orbitalMap3d';
+const IDLE_TIMEOUT_MS = 2000;
 const POLL_INTERVAL_MS = 30000;
 
 const LINE_LEGEND: Array<{ label: string; routeId: string }> = [
@@ -60,6 +62,45 @@ function readStoredOpen() {
   } catch {
     return true;
   }
+}
+
+function readStoredScene() {
+  try {
+    return localStorage.getItem(SCENE_STORAGE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+function subscribePageVisibility(callback: () => void) {
+  document.addEventListener('visibilitychange', callback);
+  return () => document.removeEventListener('visibilitychange', callback);
+}
+
+function useInView(element: Element | null) {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (!element) return;
+    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+  return inView;
+}
+
+/** Waits for arrivals and the map to be on screen, then for an idle main thread, before paying for the 3D chunk and WebGL setup. */
+function useDeferredMount(ready: boolean) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (!ready || mounted) return;
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(() => setMounted(true), { timeout: IDLE_TIMEOUT_MS });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(() => setMounted(true), 200);
+    return () => clearTimeout(id);
+  }, [ready, mounted]);
+  return mounted;
 }
 
 function readPerfFlag() {
@@ -156,11 +197,13 @@ export interface OrbitalMapPanelHandle {
 interface OrbitalMapPanelProps {
   savedStationIds: string[];
   arrivals: TrainArrival[];
+  /** Arrivals have rendered; until then the map stays out of the way of the first paint. */
+  arrivalsReady: boolean;
   onTrackStation: (stationId: string) => void;
   ref?: Ref<OrbitalMapPanelHandle>;
 }
 
-export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref }: OrbitalMapPanelProps) {
+export function OrbitalMapPanel({ savedStationIds, arrivals, arrivalsReady, onTrackStation, ref }: OrbitalMapPanelProps) {
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
@@ -175,6 +218,14 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   const perf = useSyncExternalStore(noopSubscribe, readPerfFlag, () => false);
   const [closeupStationId, setCloseupStationId] = useState<string | null>(null);
   const open = openOverride ?? storedOpen;
+  const [sceneOverride, setSceneOverride] = useState<boolean | null>(null);
+  const storedScene = useSyncExternalStore(noopSubscribe, readStoredScene, () => true);
+  const sceneEnabled = sceneOverride ?? storedScene;
+  const pageVisible = useSyncExternalStore(subscribePageVisibility, () => !document.hidden, () => true);
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+  const inView = useInView(viewport);
+  const [engaged, setEngaged] = useState(false);
+  const [hinting, setHinting] = useState(false);
 
   const toggleOpen = () => {
     setOpenOverride(!open);
@@ -185,9 +236,36 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     }
   };
 
-  const canRender = open && capability?.webgl === true && !contextLost;
+  const toggleScene = () => {
+    setSceneOverride(!sceneEnabled);
+    setEngaged(false);
+    try {
+      localStorage.setItem(SCENE_STORAGE_KEY, sceneEnabled ? 'off' : 'on');
+    } catch {
+      // Same as above: remembered for this visit only.
+    }
+  };
+
+  const canRender = open && sceneEnabled && capability?.webgl === true && !contextLost;
+  const sceneMounted = useDeferredMount(canRender && arrivalsReady && inView);
   // A station card can open the close-up while the map is collapsed, and the close-up still needs the fleet.
-  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null);
+  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null && arrivalsReady);
+
+  useEffect(() => {
+    if (!engaged) return;
+    const release = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEngaged(false);
+    };
+    const releaseOutside = (event: PointerEvent) => {
+      if (!viewport?.contains(event.target as Node)) setEngaged(false);
+    };
+    window.addEventListener('keydown', release);
+    window.addEventListener('pointerdown', releaseOutside);
+    return () => {
+      window.removeEventListener('keydown', release);
+      window.removeEventListener('pointerdown', releaseOutside);
+    };
+  }, [engaged, viewport]);
   const { fleet } = telemetry;
 
   const selectStation = useCallback((stationId: string | null) => {
@@ -234,8 +312,17 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     sceneContent = <SceneStatus label="Checking systems" detail="Probing graphics support…" />;
   } else if (!capability.webgl) {
     sceneContent = unavailable("This browser or device doesn't support WebGL.");
+  } else if (!sceneEnabled) {
+    sceneContent = (
+      <div role="status" className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="hud-label">3D map off</div>
+        <p className="max-w-sm text-sm text-muted-foreground">The ticker, spaceport manifests, and arrivals keep updating. Turn it back on from the panel header.</p>
+      </div>
+    );
   } else if (contextLost) {
     sceneContent = unavailable('The graphics context was lost.', retryScene);
+  } else if (!sceneMounted) {
+    sceneContent = <SceneStatus label="Plotting trajectories" detail="Loading 3D renderer…" />;
   } else {
     sceneContent = (
       <SceneErrorBoundary key={sceneKey} fallback={unavailable('The 3D renderer hit an error.', retryScene)}>
@@ -247,7 +334,8 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
           focusNonce={focusNonce}
           onSelectStation={enterSpaceport}
           onSelectRocket={selectRocket}
-          paused={closeupStationId !== null}
+          paused={closeupStationId !== null || !inView || !pageVisible}
+          engaged={engaged}
           perf={perf}
           reducedMotion={reducedMotion}
           lowPower={capability.lowPower}
@@ -265,21 +353,47 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
           <Rocket className="h-3 w-3 text-ignition" />
           Space network · Live
         </h2>
-        <button
-          type="button"
-          onClick={toggleOpen}
-          aria-expanded={open}
-          aria-controls="orbital-map-body"
-          className="flex items-center gap-1.5 font-mono text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-telemetry"
-        >
-          {open ? 'Collapse' : 'Open network'}
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
+        <div className="flex items-center gap-4">
+          {open && capability?.webgl && (
+            <button
+              type="button"
+              onClick={toggleScene}
+              aria-pressed={sceneEnabled}
+              aria-label="3D map"
+              className={`flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-[0.18em] transition-colors hover:border-telemetry hover:text-telemetry ${sceneEnabled ? 'border-telemetry/60 text-telemetry' : 'text-muted-foreground'}`}
+            >
+              <Box className="h-3 w-3" /> 3D {sceneEnabled ? 'on' : 'off'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={toggleOpen}
+            aria-expanded={open}
+            aria-controls="orbital-map-body"
+            className="flex items-center gap-1.5 font-mono text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-telemetry"
+          >
+            {open ? 'Collapse' : 'Open network'}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {open && (
         <div id="orbital-map-body" className="grid lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="relative h-[420px] overflow-hidden sm:h-[560px]">
+          <div
+            ref={setViewport}
+            data-map-engaged={engaged}
+            onPointerDown={() => setEngaged(true)}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse') setHinting(true);
+            }}
+            onPointerLeave={(event) => {
+              setHinting(false);
+              if (event.pointerType === 'mouse') setEngaged(false);
+            }}
+            onWheel={() => setHinting(true)}
+            className="relative h-[420px] overflow-hidden sm:h-[560px]"
+          >
             <div
               className="absolute inset-0"
               {...(canRender && {
@@ -304,6 +418,13 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
                 >
                   <LocateFixed className="h-3 w-3" /> Overview
                 </button>
+                {sceneMounted && hinting && !engaged && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="border bg-card/85 px-3 py-1.5 text-center font-mono text-[0.65rem] uppercase tracking-[0.16em] text-muted-foreground backdrop-blur-sm">
+                      <span className="text-telemetry">Click to interact</span> · ctrl + scroll or pinch to zoom
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

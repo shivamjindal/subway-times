@@ -454,6 +454,7 @@ export const SubwayTimesDisplay = forwardRef<SubwayTimesDisplayRef>((props, ref)
         ref={mapRef}
         savedStationIds={selectedStationIds}
         arrivals={data?.arrivals ?? []}
+        arrivalsReady={!loading}
         onTrackStation={(stationId) => handleStationsChange([...selectedStationIds, stationId])}
       />
 

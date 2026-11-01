@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import type { EstimatedTrain } from '@/lib/train-positions';
 import { MAP_STATIONS, ROUTE_LINES, getMapStation, project, type MapStation } from './map-geometry';
 import { useFrameCost } from './frame-probe';
+import { cameraInputs, wheelAction } from './map-interaction';
 import { RocketNetwork, type NetworkStats } from './rocket-network';
 import type { Fleet } from './rocket-timeline';
 
@@ -21,8 +22,10 @@ export interface OrbitalMapSceneProps {
   focusNonce: number;
   onSelectStation: (stationId: string) => void;
   onSelectRocket: (train: EstimatedTrain, stationId: string) => void;
-  /** Stops rendering entirely (e.g. while the spaceport close-up is open). */
+  /** Stops rendering entirely (close-up open, map offscreen, or tab hidden). */
   paused: boolean;
+  /** The user clicked into the map, so wheel and one-finger drags drive the camera instead of the page. */
+  engaged: boolean;
   /** Shows an FPS / rocket-count readout and mirrors it to window.__spaceNetworkPerf. */
   perf: boolean;
   reducedMotion: boolean;
@@ -272,9 +275,37 @@ function PerfProbe({ statsRef, outputRef }: { statsRef: React.RefObject<NetworkS
   return null;
 }
 
-function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedStationId: string | null; focusNonce: number; reducedMotion: boolean }) {
+function CameraRig({
+  selectedStationId,
+  focusNonce,
+  reducedMotion,
+  engaged,
+}: {
+  selectedStationId: string | null;
+  focusNonce: number;
+  reducedMotion: boolean;
+  engaged: boolean;
+}) {
   const controlsRef = useRef<ComponentRef<typeof CameraControls>>(null);
   const initialized = useRef(false);
+  const getState = useThree((s) => s.get);
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const { events, gl } = getState();
+    const element = (events.connected as HTMLElement | undefined) ?? gl.domElement;
+    const inputs = cameraInputs(engaged);
+    controls.touches.one = inputs.one;
+    controls.touches.two = inputs.two;
+    element.style.touchAction = inputs.touchAction;
+    // Capture runs before camera-controls' own wheel listener, which skips (and doesn't preventDefault) on ACTION.NONE.
+    const onWheel = (event: WheelEvent) => {
+      controls.mouseButtons.wheel = wheelAction(engaged, event.ctrlKey);
+    };
+    element.addEventListener('wheel', onWheel, { capture: true });
+    return () => element.removeEventListener('wheel', onWheel, { capture: true });
+  }, [engaged, getState]);
 
   useEffect(() => {
     const controls = controlsRef.current;
@@ -302,6 +333,20 @@ function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedS
   );
 }
 
+/** Removed on unmount: R3F force-loses the context after unmounting, which must not read as a real context loss. */
+function ContextLossListener({ onContextLost }: { onContextLost: () => void }) {
+  const canvas = useThree((s) => s.gl.domElement);
+  useEffect(() => {
+    const handle = (event: Event) => {
+      event.preventDefault();
+      onContextLost();
+    };
+    canvas.addEventListener('webglcontextlost', handle);
+    return () => canvas.removeEventListener('webglcontextlost', handle);
+  }, [canvas, onContextLost]);
+  return null;
+}
+
 /** With frameloop="demand", trains only advance when something asks for a frame. */
 function ReducedMotionTicker({ fleet }: { fleet: Fleet }) {
   const invalidate = useThree((s) => s.invalidate);
@@ -322,6 +367,7 @@ export default function OrbitalMapScene({
   onSelectStation,
   onSelectRocket,
   paused,
+  engaged,
   perf,
   reducedMotion,
   lowPower,
@@ -365,13 +411,8 @@ export default function OrbitalMapScene({
         frameloop={paused ? 'never' : reducedMotion ? 'demand' : 'always'}
         gl={{ antialias: !lowPower, powerPreference: lowPower ? 'low-power' : 'high-performance' }}
         camera={{ fov: 42, near: 0.05, far: 400, position: [CENTER_X, OVERVIEW_OFFSET[1], CENTER_Z + OVERVIEW_OFFSET[2]] }}
-        onCreated={({ gl }) => {
-          gl.domElement.addEventListener('webglcontextlost', (event) => {
-            event.preventDefault();
-            onContextLost();
-          });
-        }}
       >
+        <ContextLossListener onContextLost={onContextLost} />
         <color attach="background" args={[palette.background]} />
         <fog attach="fog" args={[palette.background, 50, 130]} />
         <PerformanceMonitor onDecline={() => setPerformanceOk(false)} />
@@ -407,7 +448,7 @@ export default function OrbitalMapScene({
           statsRef={statsRef}
         />
         {perf && <PerfProbe statsRef={statsRef} outputRef={perfOutput} />}
-        <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} />
+        <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} engaged={engaged} />
         <LabelProjector labels={labels} elements={labelElements} />
 
         {bloom && (
