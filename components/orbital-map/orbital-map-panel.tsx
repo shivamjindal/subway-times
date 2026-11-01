@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useEffect, useImperativeHandle, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
+import { Component, useCallback, useEffect, useImperativeHandle, useRef, useState, useSyncExternalStore, type ReactNode, type Ref, type RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import { ChevronDown, Crosshair, DoorOpen, LocateFixed, Plus, Radar, Rocket, Satellite, X } from 'lucide-react';
@@ -50,6 +50,41 @@ function detectCapability(): Capability {
     (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 4 || Boolean(nav.connection?.saveData);
   capabilityCache = { webgl, lowPower };
   return capabilityCache;
+}
+
+const NEAR_VIEWPORT_MARGIN = '600px';
+
+function useViewportFlags(ref: RefObject<HTMLElement | null>, active: boolean) {
+  const [near, setNear] = useState(false);
+  const [onScreen, setOnScreen] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const nearObserver = new IntersectionObserver(([entry]) => entry.isIntersecting && setNear(true), { rootMargin: NEAR_VIEWPORT_MARGIN });
+    const screenObserver = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting));
+    nearObserver.observe(el);
+    screenObserver.observe(el);
+    return () => {
+      nearObserver.disconnect();
+      screenObserver.disconnect();
+    };
+  }, [ref, active]);
+
+  return { near, onScreen };
+}
+
+// Plain wheel scrolls the page; ctrl/pinch (which browsers report as ctrlKey) or an opted-in click zooms the map.
+function useWheelGate(ref: RefObject<HTMLElement | null>, active: boolean, interactive: boolean) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const gate = (event: WheelEvent) => {
+      if (!interactive && !event.ctrlKey) event.stopPropagation();
+    };
+    el.addEventListener('wheel', gate, { capture: true });
+    return () => el.removeEventListener('wheel', gate, { capture: true });
+  }, [ref, active, interactive]);
 }
 
 const noopSubscribe = () => () => {};
@@ -175,6 +210,17 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   const perf = useSyncExternalStore(noopSubscribe, readPerfFlag, () => false);
   const [closeupStationId, setCloseupStationId] = useState<string | null>(null);
   const open = openOverride ?? storedOpen;
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [interactive, setInteractive] = useState(false);
+  const { near, onScreen } = useViewportFlags(mapRef, open);
+  useWheelGate(mapRef, open, interactive);
+
+  useEffect(() => {
+    if (!interactive) return;
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setInteractive(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [interactive]);
 
   const toggleOpen = () => {
     setOpenOverride(!open);
@@ -185,9 +231,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
     }
   };
 
-  const canRender = open && capability?.webgl === true && !contextLost;
+  const canRender = open && near && capability?.webgl === true && !contextLost;
   // A station card can open the close-up while the map is collapsed, and the close-up still needs the fleet.
-  const telemetry = useTrainTelemetry((open || closeupStationId !== null) && capability !== null);
+  const telemetry = useTrainTelemetry(((open && near) || closeupStationId !== null) && capability !== null);
   const { fleet } = telemetry;
 
   const selectStation = useCallback((stationId: string | null) => {
@@ -230,7 +276,9 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
   );
 
   let sceneContent: ReactNode;
-  if (!capability) {
+  if (!near) {
+    sceneContent = <SceneStatus label="Map standing by" detail="Loads as you scroll here" />;
+  } else if (!capability) {
     sceneContent = <SceneStatus label="Checking systems" detail="Probing graphics support…" />;
   } else if (!capability.webgl) {
     sceneContent = unavailable("This browser or device doesn't support WebGL.");
@@ -247,7 +295,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
           focusNonce={focusNonce}
           onSelectStation={enterSpaceport}
           onSelectRocket={selectRocket}
-          paused={closeupStationId !== null}
+          paused={closeupStationId !== null || !onScreen}
           perf={perf}
           reducedMotion={reducedMotion}
           lowPower={capability.lowPower}
@@ -279,7 +327,12 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
 
       {open && (
         <div id="orbital-map-body" className="grid lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <div className="relative h-[420px] overflow-hidden sm:h-[560px]">
+          <div
+            ref={mapRef}
+            onPointerDown={() => setInteractive(true)}
+            onPointerLeave={() => setInteractive(false)}
+            className="relative h-[420px] overflow-hidden sm:h-[560px]"
+          >
             <div
               className="absolute inset-0"
               {...(canRender && {
@@ -294,6 +347,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
               <>
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-background/90 to-transparent px-4 pb-3 pt-8">
                   <p className="font-mono text-[0.65rem] uppercase leading-relaxed tracking-[0.14em] text-muted-foreground">
+                    {!interactive && <span className="text-telemetry">Click or Ctrl + scroll to zoom · </span>}
                     <span className="text-caution">Est. positions</span> · each rocket is a train, flown between stations from MTA arrival predictions — not GPS
                   </p>
                 </div>

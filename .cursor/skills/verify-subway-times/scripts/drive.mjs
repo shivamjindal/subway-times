@@ -27,7 +27,7 @@ const out = arg('--out', path.join(process.env.EVIDENCE_ROOT ?? '/opt/cursor/art
 const CHROME = process.env.CHROME_BIN ?? 'google-chrome';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const JOURNEYS = { ready, map, search, closeup, 'card-closeup': cardCloseup, feedback };
+const JOURNEYS = { ready, home, map, search, closeup, 'card-closeup': cardCloseup, feedback };
 if (!JOURNEYS[journey]) {
   console.error(`usage: drive.mjs <${Object.keys(JOURNEYS).join('|')}> [--port N] [--out DIR]`);
   process.exit(2);
@@ -183,6 +183,8 @@ const mapRockets = `(() => { const m = ${MAP_IMG}?.getAttribute('aria-label').ma
 
 /** The map is usable when the scene's canvas exists, the fleet has rockets, and the ticker shows them. */
 async function waitForMap() {
+  await waitFor('map section', `document.getElementById('orbital-map-body')`);
+  await evaluate(`document.getElementById('orbital-map-body').scrollIntoView({ block: 'center' }); true`);
   const rockets = await waitFor('rockets on the map', `${MAP_IMG}?.querySelector('canvas') && ${mapRockets} > 0 && document.querySelector('[data-testid=network-ticker]') && ${mapRockets}`, 120000);
   check('map canvas mounted with rockets', rockets > 0, `${rockets} rockets`);
   const ticker = await evaluate(`document.querySelector('[data-testid=network-ticker]').textContent`);
@@ -212,6 +214,65 @@ async function ready() {
   const perf = await waitFor('rendered frames with visible rockets', `(() => { const p = window.__spaceNetworkPerf; return p && p.fps > 0 && p.visible > 0 ? p : null; })()`, 60000);
   check('renderer drawing rockets', perf.visible > 0 && perf.fps > 0, `${perf.fps} FPS · ${perf.visible}/${perf.total} rockets visible · ${perf.drawCalls} draws`);
   await shot('ready');
+}
+
+/** Wheel at the centre of the visible part of the map. */
+async function wheel(deltaY, modifiers = 0) {
+  const y = await evaluate(`(() => { const r = document.getElementById('orbital-map-body').getBoundingClientRect(); return (Math.max(r.top, 0) + Math.min(r.bottom, innerHeight)) / 2; })()`);
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 400, y, deltaX: 0, deltaY, modifiers });
+}
+
+async function home() {
+  await goto('/');
+  await evaluate(`localStorage.removeItem('selectedStations'); localStorage.removeItem('orbitalMapOpen'); true`);
+  await goto('/');
+  await addTimesSq();
+  await goto('/');
+  await waitFor('station card', `${find('h2', 'Times Sq-42 St')}`, 60000);
+  await shot('home-top');
+  const order = await evaluate(`(() => { const card = ${find('h2', 'Times Sq-42 St')}; const map = document.getElementById('orbital-map-title'); return card && map ? card.getBoundingClientRect().top < map.getBoundingClientRect().top : null; })()`);
+  check('arrivals render above the map', order === true);
+
+  await waitForMap();
+  await evaluate(`window.__rafCount = 0; const raf = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => { window.__rafCount++; return raf(cb); }; true`);
+  await sleep(1500);
+  check('render loop runs while the map is on screen', (await evaluate('window.__rafCount')) > 0, await evaluate('window.__rafCount'));
+  await shot('home-map');
+
+  await evaluate(`document.getElementById('orbital-map-body').scrollIntoView({ block: 'center' }); true`);
+  await sleep(500);
+  let y = await evaluate('window.scrollY');
+  await wheel(-300);
+  await sleep(600);
+  const scrolled = await evaluate('window.scrollY');
+  check('plain wheel over the map scrolls the page', scrolled < y, `${y} -> ${scrolled}`);
+
+  y = scrolled;
+  await wheel(-300, 2);
+  await sleep(600);
+  check('ctrl+wheel zooms the map and leaves the page in place', (await evaluate('window.scrollY')) === y, `${y} -> ${await evaluate('window.scrollY')}`);
+
+  await click('map interact (click)', '#orbital-map-body [role=img]');
+  y = await evaluate('window.scrollY');
+  await wheel(-300);
+  await sleep(600);
+  check('after click-to-interact, wheel zooms instead of scrolling', (await evaluate('window.scrollY')) === y, `${y} -> ${await evaluate('window.scrollY')}`);
+
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 10, y: 10 });
+  await evaluate(`window.scrollTo(0, 0); true`);
+  await sleep(1000);
+  await evaluate('window.__rafCount = 0; true');
+  await sleep(1500);
+  check('render loop pauses when the map is offscreen', (await evaluate('window.__rafCount')) <= 2, await evaluate('window.__rafCount'));
+
+  await click('Collapse button', 'button[aria-controls=orbital-map-body]');
+  await waitFor('map off', `!document.getElementById('orbital-map-body') && localStorage.getItem('orbitalMapOpen') === 'false'`);
+  network.length = 0;
+  await goto('/');
+  await waitFor('station card', `${find('h2', 'Times Sq-42 St')}`, 60000);
+  await sleep(1500);
+  check('map-off preference persists across reload with no map or telemetry fetch', !(await evaluate(`document.getElementById('orbital-map-body')`)) && !lastResponse('/api/train-positions'));
+  await shot('home-map-off');
 }
 
 async function map() {
