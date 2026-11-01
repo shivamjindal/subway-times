@@ -208,6 +208,8 @@ async function waitForResponse(urlPart, timeoutMs = 60000) {
 async function ready() {
   await goto('/?perf=1');
   await waitForMap();
+  // The renderer pauses while offscreen, so bring the map into view before reading frame stats.
+  await evaluate(`${MAP_IMG}.scrollIntoView({ block: 'center' }); true`);
   // ?perf=1 publishes the renderer's own frame stats: proof frames are drawing rockets, not just that the DOM exists.
   const perf = await waitFor('rendered frames with visible rockets', `(() => { const p = window.__spaceNetworkPerf; return p && p.fps > 0 && p.visible > 0 ? p : null; })()`, 60000);
   check('renderer drawing rockets', perf.visible > 0 && perf.fps > 0, `${perf.fps} FPS · ${perf.visible}/${perf.total} rockets visible · ${perf.drawCalls} draws`);
