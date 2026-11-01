@@ -51,6 +51,10 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
   const southboundRoutes = getSouthboundRoutesForStation(stationId);
   const hasCloseup = getSpaceport(stationId).pads.length > 0;
 
+  const isStatenIslandOnly = routes.length > 0 && routes.every((route) => route.routeId === 'SI');
+  const northName = isStatenIslandOnly ? 'Northbound' : 'Uptown';
+  const southName = isStatenIslandOnly ? 'Southbound' : 'Downtown';
+
   const hasNorthbound = northboundRoutes.length > 0;
   const hasSouthbound = southboundRoutes.length > 0;
 
@@ -88,8 +92,8 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
 
   const directionOptions: Array<{ value: 'all' | 'N' | 'S'; label: string; show: boolean }> = [
     { value: 'all', label: 'All', show: true },
-    { value: 'N', label: `↑ ${northboundLabel}`, show: hasNorthbound },
-    { value: 'S', label: `↓ ${southboundLabel}`, show: hasSouthbound },
+    { value: 'N', label: `↑ ${northName} · ${northboundLabel}`, show: hasNorthbound },
+    { value: 'S', label: `↓ ${southName} · ${southboundLabel}`, show: hasSouthbound },
   ];
 
   return (
@@ -148,6 +152,9 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                 );
               })}
             </div>
+            <p className="mt-2 font-mono text-[0.65rem] text-muted-foreground">
+              Each colored bullet is a subway line. An X means express, e.g. 6X is the 6 skipping local stops.
+            </p>
           </div>
           <button
             type="button"
@@ -195,7 +202,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
               aria-label={`Enter spaceport: ${station.name}`}
               className="ml-auto flex items-center gap-1.5 border border-telemetry/60 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.18em] text-telemetry transition-colors hover:bg-telemetry/10"
             >
-              <DoorOpen className="h-3.5 w-3.5" /> Enter spaceport
+              <DoorOpen className="h-3.5 w-3.5" /> Enter spaceport <span className="normal-case tracking-normal text-telemetry/70">(station view)</span>
             </button>
           ) : (
             <span className="ml-auto font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
@@ -242,7 +249,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
             <div>
               <div className="hidden sm:grid grid-cols-[1fr_auto] gap-4 px-4 pb-2">
                 <span className="hud-label">Booster · Destination</span>
-                <span className="hud-label text-right">T-minus · ETA</span>
+                <span className="hud-label text-right">T-minus (min away) · ETA</span>
               </div>
               <ol className="space-y-2">
                 {displayedArrivals.map((arrival, index) => {
@@ -279,7 +286,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                             </div>
                           )}
                           <div className="font-semibold truncate">
-                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? '↑' : '↓'} </span>
+                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? `↑ ${northName}` : `↓ ${southName}`} · </span>
                             {arrival.destination}
                           </div>
                           {arrival.trainId && (
@@ -302,6 +309,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                           >
                             <span className="text-muted-foreground font-medium text-base mr-1">T−</span>
                             {formatCountdown(secondsLeft)}
+                            <span className="text-muted-foreground font-medium text-xs ml-1.5">min away</span>
                           </div>
                         )}
                         <div className="font-mono text-xs text-muted-foreground mt-0.5">

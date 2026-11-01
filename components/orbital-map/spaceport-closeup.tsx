@@ -162,7 +162,7 @@ export function SpaceportCloseup({
         <aside className="overflow-y-auto p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="hud-label flex items-center gap-2">
-              <Rocket className="h-3 w-3 text-ignition" /> Spaceport
+              <Rocket className="h-3 w-3 text-ignition" /> Spaceport · station
             </div>
             <button
               type="button"
