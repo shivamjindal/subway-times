@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { CameraControls, Grid, Line, PerformanceMonitor } from '@react-three/drei';
+import { CameraControls, CameraControlsImpl, Grid, Line, PerformanceMonitor } from '@react-three/drei';
 import { Bloom, EffectComposer } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import type { EstimatedTrain } from '@/lib/train-positions';
@@ -272,9 +272,22 @@ function PerfProbe({ statsRef, outputRef }: { statsRef: React.RefObject<NetworkS
   return null;
 }
 
-function CameraRig({ selectedStationId, focusNonce, reducedMotion }: { selectedStationId: string | null; focusNonce: number; reducedMotion: boolean }) {
+function CameraRig({ selectedStationId, focusNonce, reducedMotion, engaged }: { selectedStationId: string | null; focusNonce: number; reducedMotion: boolean; engaged: boolean }) {
   const controlsRef = useRef<ComponentRef<typeof CameraControls>>(null);
   const initialized = useRef(false);
+  const get = useThree((state) => state.get);
+
+  // The page must keep scrolling under a wheel or one-finger swipe until the user clicks into the map.
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const { ACTION } = CameraControlsImpl;
+    controls.mouseButtons.wheel = engaged ? ACTION.DOLLY : ACTION.NONE;
+    controls.touches.one = engaged ? ACTION.TOUCH_ROTATE : ACTION.NONE;
+    controls.touches.two = engaged ? ACTION.TOUCH_DOLLY_TRUCK : ACTION.NONE;
+    controls.touches.three = ACTION.NONE;
+    get().gl.domElement.style.touchAction = engaged ? 'none' : 'pan-y';
+  }, [engaged, get]);
 
   useEffect(() => {
     const controls = controlsRef.current;
@@ -332,6 +345,8 @@ export default function OrbitalMapScene({
   const perfOutput = useRef<HTMLDivElement>(null);
   const palette = PALETTES[theme];
   const [performanceOk, setPerformanceOk] = useState(true);
+  const [engaged, setEngaged] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<MapStation | null>(null);
   const [labelElements] = useState(() => new Map<string, HTMLDivElement>());
   const bloom = theme === 'dark' && !lowPower && performanceOk;
@@ -352,6 +367,15 @@ export default function OrbitalMapScene({
   }, [savedStationIds, savedSet, selectedStationId, hovered]);
 
   useEffect(() => {
+    if (!engaged) return;
+    const release = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setEngaged(false);
+    };
+    document.addEventListener('pointerdown', release);
+    return () => document.removeEventListener('pointerdown', release);
+  }, [engaged]);
+
+  useEffect(() => {
     document.body.style.cursor = hovered ? 'pointer' : '';
     return () => {
       document.body.style.cursor = '';
@@ -359,7 +383,12 @@ export default function OrbitalMapScene({
   }, [hovered]);
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      ref={wrapperRef}
+      className="relative h-full w-full"
+      onPointerDown={() => setEngaged(true)}
+      onPointerLeave={(event) => event.pointerType === 'mouse' && setEngaged(false)}
+    >
       <Canvas
         dpr={lowPower ? 1 : [1, 2]}
         frameloop={paused ? 'never' : reducedMotion ? 'demand' : 'always'}
@@ -407,7 +436,7 @@ export default function OrbitalMapScene({
           statsRef={statsRef}
         />
         {perf && <PerfProbe statsRef={statsRef} outputRef={perfOutput} />}
-        <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} />
+        <CameraRig selectedStationId={selectedStationId} focusNonce={focusNonce} reducedMotion={reducedMotion} engaged={engaged} />
         <LabelProjector labels={labels} elements={labelElements} />
 
         {bloom && (
@@ -417,6 +446,9 @@ export default function OrbitalMapScene({
         )}
       </Canvas>
 
+      <div className="pointer-events-none absolute bottom-3 right-3 border bg-card/85 px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-muted-foreground backdrop-blur-sm">
+        {engaged ? 'Thrusters engaged · scroll to zoom' : 'Click map to engage zoom'}
+      </div>
       {perf && (
         <div ref={perfOutput} className="pointer-events-none absolute left-3 top-3 border bg-popover/85 px-2 py-1 font-mono text-[0.65rem] tabular-nums text-nominal" />
       )}

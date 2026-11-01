@@ -24,11 +24,10 @@ import { CSS } from '@dnd-kit/utilities';
 interface StationSelectorProps {
   selectedStations: string[];
   onStationsChange: (stations: string[]) => void;
-  filteredStations?: string[];
-  onStationFilterToggle?: (stationId: string) => void;
+  onStationJump?: (stationId: string) => void;
 }
 
-export function StationSelector({ selectedStations, onStationsChange, filteredStations = [], onStationFilterToggle }: StationSelectorProps) {
+export function StationSelector({ selectedStations, onStationsChange, onStationJump }: StationSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -194,13 +193,11 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
           >
             <div className="hud-label mb-2 mt-1">
               Tracking {selectedStationData.length} station{selectedStationData.length > 1 ? 's' : ''}
-              {onStationFilterToggle && selectedStationData.length > 1 && ' · tap to filter, drag to reorder'}
+              {onStationJump && selectedStationData.length > 1 && ' · tap to jump, drag to reorder'}
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
               {selectedStationData.map((station) => {
                 const routes = getRoutesForStation(station.stopId);
-                const hasFiltered = filteredStations.length > 0;
-                const isFiltered = filteredStations.includes(station.stopId);
                 return (
                   <SortableStationCard
                     key={station.stopId}
@@ -209,9 +206,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                     routes={routes}
                     onRemove={handleRemoveStation}
                     canDrag={selectedStations.length > 1}
-                    isFiltered={isFiltered}
-                    hasFilteredStations={hasFiltered}
-                    onFilterToggle={onStationFilterToggle}
+                    onJump={onStationJump}
                   />
                 );
               })}
@@ -229,12 +224,10 @@ interface SortableStationCardProps {
   routes: ReturnType<typeof getRoutesForStation>;
   onRemove: (stationId: string, e?: React.MouseEvent) => void;
   canDrag: boolean;
-  isFiltered: boolean;
-  hasFilteredStations: boolean;
-  onFilterToggle?: (stationId: string) => void;
+  onJump?: (stationId: string) => void;
 }
 
-function SortableStationCard({ stationId, station, routes, onRemove, canDrag, isFiltered, hasFilteredStations, onFilterToggle }: SortableStationCardProps) {
+function SortableStationCard({ stationId, station, routes, onRemove, canDrag, onJump }: SortableStationCardProps) {
   const {
     attributes,
     listeners,
@@ -244,28 +237,22 @@ function SortableStationCard({ stationId, station, routes, onRemove, canDrag, is
     isDragging,
   } = useSortable({ id: stationId });
 
-  // Calculate opacity: full when no filter or when this station is filtered, dimmed otherwise
-  const filterOpacity = hasFilteredStations ? (isFiltered ? 1 : 0.4) : 1;
-  const finalOpacity = isDragging ? 0.5 : filterOpacity;
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: finalOpacity,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   const handleCardClick = () => {
-    // Only trigger filter toggle if it wasn't a drag action
-    if (onFilterToggle) {
-      onFilterToggle(stationId);
-    }
+    onJump?.(stationId);
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-2 pl-3 pr-1.5 py-2 bg-card/80 backdrop-blur border flex-shrink-0 min-w-fit transition-all ${hasFilteredStations && isFiltered ? 'border-telemetry shadow-[0_0_16px_-6px_var(--telemetry)]' : ''} ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} hover:border-foreground/40`}
+      className={`flex items-center gap-2 pl-3 pr-1.5 py-2 bg-card/80 backdrop-blur border flex-shrink-0 min-w-fit transition-all ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} hover:border-foreground/40`}
       onClick={handleCardClick}
       {...(canDrag ? { ...attributes, ...listeners } : {})}
     >

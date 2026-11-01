@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { summarizeAlerts } from '@/lib/alert-summary';
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, DoorOpen, Rocket, SatelliteDish } from 'lucide-react';
 import { getSpaceport } from '@/lib/spaceports';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
@@ -43,6 +44,7 @@ function formatCountdown(secondsUntilArrival: number) {
 export function StationCard({ stationId, arrivals, alerts, direction, onDirectionChange, selectedRoutes, onRouteToggle, onEnterSpaceport }: StationCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const now = useNowSeconds();
 
   const station = getStation(stationId);
@@ -211,23 +213,32 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
 
           {/* Service Alerts */}
           {hasAlerts && (
-            <div className="space-y-2">
-              {alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  role="alert"
-                  className="flex gap-3 border border-caution/40 bg-caution/10 border-l-4 border-l-caution px-3 sm:px-4 py-3"
-                >
-                  <AlertTriangle className="h-4 w-4 text-caution shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="hud-label !text-caution mb-1.5">Mission advisory · Service alert</div>
-                    <div className="text-sm sm:text-base font-medium break-words">{alert.headerText}</div>
-                    {alert.descriptionText && (
-                      <div className="mt-1 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
-                    )}
-                  </div>
+            <div className="border border-caution/40 bg-caution/10 border-l-4 border-l-caution">
+              <button
+                type="button"
+                onClick={() => setAlertsOpen((open) => !open)}
+                aria-expanded={alertsOpen}
+                aria-controls={`alerts-${stationId}`}
+                className="flex w-full items-center gap-3 px-3 sm:px-4 py-2 text-left"
+              >
+                <AlertTriangle className="h-4 w-4 text-caution shrink-0" />
+                <span className="hud-label !text-caution shrink-0">Advisory</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{summarizeAlerts(alerts)}</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${alertsOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {alertsOpen && (
+                <div id={`alerts-${stationId}`} className="space-y-3 border-t border-caution/30 px-3 sm:px-4 py-3">
+                  {alerts.map((alert) => (
+                    <div key={alert.id} role="alert" className="min-w-0">
+                      <div className="hud-label !text-caution mb-1.5">Mission advisory · Service alert</div>
+                      <div className="text-sm sm:text-base font-medium break-words">{alert.headerText}</div>
+                      {alert.descriptionText && (
+                        <div className="mt-1 text-sm text-muted-foreground break-words whitespace-pre-line">{alert.descriptionText}</div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 
