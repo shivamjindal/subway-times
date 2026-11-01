@@ -167,7 +167,7 @@ export function SpaceportCloseup({
             <button
               type="button"
               onClick={() => dialogRef.current?.close()}
-              className="-m-1 p-1 text-muted-foreground hover:text-foreground"
+              className="-m-2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground"
               aria-label="Close spaceport"
             >
               <X className="h-4 w-4" />

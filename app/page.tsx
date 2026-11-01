@@ -22,11 +22,11 @@ function MissionClock() {
   return (
     <div className="hidden sm:flex items-center gap-5 font-mono text-xs tabular-nums">
       <div className="text-right">
-        <div className="hud-label">Local · NYC</div>
+        <div className="hud-label">Mission clock · NYC time</div>
         <div className="mt-1 text-foreground">{now ? format(now, 'America/New_York') : '--:--:--'}</div>
       </div>
       <div className="text-right">
-        <div className="hud-label">UTC</div>
+        <div className="hud-label">UTC · Universal time</div>
         <div className="mt-1 text-muted-foreground">{now ? format(now, 'UTC') : '--:--:--'}</div>
       </div>
     </div>
@@ -65,7 +65,7 @@ export default function Home() {
                 type="button"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-11 w-11 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label="Refresh arrivals"
                 title="Resync telemetry"
               >
@@ -73,7 +73,7 @@ export default function Home() {
               </button>
               <Link
                 href="/feedback"
-                className="h-9 w-9 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry"
+                className="h-11 w-11 border bg-card flex items-center justify-center transition-colors hover:border-telemetry hover:text-telemetry"
                 aria-label="Send feedback"
                 title="Transmit feedback"
               >

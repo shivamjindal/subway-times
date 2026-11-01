@@ -429,7 +429,7 @@ function SelectedStationReadout({
         <div className="hud-label flex items-center gap-2">
           <Crosshair className="h-3 w-3 text-telemetry" /> Target locked
         </div>
-        <button type="button" onClick={onClear} className="-m-1 p-1 text-muted-foreground hover:text-foreground" aria-label="Clear selected station">
+        <button type="button" onClick={onClear} className="-m-3 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground" aria-label="Clear selected station">
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
