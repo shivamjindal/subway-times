@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { getStation, getRoutesForStation, getRouteColor, searchStationsByName, type Station } from '@/lib/subway-data';
+import { getStationSubtitle } from '@/lib/station-search';
 import { Crosshair, X } from 'lucide-react';
 import {
   DndContext,
@@ -126,6 +127,14 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
         />
         
         {/* Search Suggestions */}
+        {showSuggestions && searchQuery.trim() && searchResults.length === 0 && (
+          <div
+            role="status"
+            className="absolute z-20 w-full mt-1 bg-popover border border-telemetry/40 shadow-2xl shadow-black/60 px-4 py-3 font-mono text-sm text-muted-foreground"
+          >
+            No stations match &ldquo;{searchQuery.trim()}&rdquo;. Try a different spelling.
+          </div>
+        )}
         {showSuggestions && searchResults.length > 0 && (
           <div className="absolute z-20 w-full mt-1 bg-popover border border-telemetry/40 shadow-2xl shadow-black/60 max-h-72 overflow-y-auto divide-y">
             {searchResults.map((stationWithRoutes) => {
@@ -156,6 +165,7 @@ export function StationSelector({ selectedStations, onStationsChange, filteredSt
                       {isSelected ? 'Tracking' : 'Lock target ↵'}
                     </span>
                   </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{getStationSubtitle(stationWithRoutes)}</div>
                   <div className="flex gap-1.5 mt-2 flex-wrap">
                     {stationWithRoutes.routes.map((route) => {
                       const color = getRouteColor(route.routeId);
