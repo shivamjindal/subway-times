@@ -30,12 +30,13 @@ Use this when changing route/station mappings, GTFS parsing, or subway alerts.
   - `getRoutesForStation(stopId)`
   - `getNorthboundRoutesForStation(stopId)`
   - `getSouthboundRoutesForStation(stopId)`
-  - `searchStationsByName(query)`
   - `getRouteColor(routeId)`
   - `getDirectionLabel(direction, arrivals)`
 - `lib/subway-parser.ts`
   - parses GTFS-Realtime trip updates into arrivals
   - parses GTFS-Realtime alerts into normalized alert objects
+- `lib/station-search.ts`
+  - `searchStations(query)` – fuzzy, hub-ranked station search with borough/line subtitles
 - `lib/train-positions.ts`
   - estimates where each train is between stations from GTFS-Realtime predictions
 - `app/api/subway-times/route.ts`
