@@ -319,7 +319,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
             />
 
             <div>
-              <div className="hud-label mb-2">Tracked spaceports</div>
+              <div className="hud-label mb-2">Tracked spaceports (stations)</div>
               {savedStationIds.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Track a spaceport to pin a beacon on the network.</p>
               ) : (
@@ -342,7 +342,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
             </div>
 
             <div>
-              <div className="hud-label mb-2">Trajectories</div>
+              <div className="hud-label mb-2">Trajectories (subway lines)</div>
               <ul className="grid grid-cols-3 gap-x-3 gap-y-1.5 font-mono text-[0.65rem] tracking-[0.12em]">
                 {LINE_LEGEND.map(({ label, routeId }) => (
                   <li key={label} className="flex items-center gap-1.5">

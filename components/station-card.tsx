@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, DoorOpen, Rocket, SatelliteDish } from 'lucide-react';
 import { getSpaceport } from '@/lib/spaceports';
 import { formatTime, type TrainArrival, type ServiceAlert } from '@/lib/subway-parser';
+import { getDirectionName, getRouteKeyCaption } from '@/lib/route-legend';
 import { getStation, getRoutesForStation, getRouteColor, getNorthboundRoutesForStation, getSouthboundRoutesForStation, getDirectionLabel } from '@/lib/subway-data';
 
 interface StationCardProps {
@@ -88,8 +89,8 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
 
   const directionOptions: Array<{ value: 'all' | 'N' | 'S'; label: string; show: boolean }> = [
     { value: 'all', label: 'All', show: true },
-    { value: 'N', label: `↑ ${northboundLabel}`, show: hasNorthbound },
-    { value: 'S', label: `↓ ${southboundLabel}`, show: hasSouthbound },
+    { value: 'N', label: `↑ ${getDirectionName('N')} · ${northboundLabel}`, show: hasNorthbound },
+    { value: 'S', label: `↓ ${getDirectionName('S')} · ${southboundLabel}`, show: hasSouthbound },
   ];
 
   return (
@@ -98,7 +99,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
       <div className="flex items-center justify-between gap-3 border-b px-4 sm:px-6 py-2">
         <div className="hud-label flex items-center gap-2">
           <span className="text-ignition">■</span>
-          Spaceport · Station {station.stopId}
+          Spaceport <span className="normal-case tracking-normal text-muted-foreground">(station)</span> · Station {station.stopId}
         </div>
         <div
           className={`flex items-center gap-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase ${hasAlerts ? 'text-caution' : 'text-nominal'}`}
@@ -148,6 +149,27 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                 );
               })}
             </div>
+            <details className="mt-2 font-mono text-[0.7rem] text-muted-foreground">
+              <summary {...stopDragPropagation} className="hud-label cursor-pointer w-fit">Key · what the bullets mean</summary>
+              <ul className="mt-2 space-y-1.5">
+                <li>Colored bullet = subway line. Same color = same trunk line.</li>
+                {routes.map((route) => (
+                  <li key={route.routeId} className="flex items-center gap-2">
+                    <span
+                      className="route-bullet h-5 w-5 text-[0.65rem] shrink-0"
+                      style={{
+                        backgroundColor: `#${getRouteColor(route.routeId)}`,
+                        color: route.textColor === 'FFFFFF' ? 'white' : 'black',
+                        ['--route-color' as string]: `#${getRouteColor(route.routeId)}`,
+                      }}
+                    >
+                      {route.shortName}
+                    </span>
+                    {getRouteKeyCaption(route.routeId)}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </div>
           <button
             type="button"
@@ -164,7 +186,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           {/* Direction Filter */}
           {(hasNorthbound || hasSouthbound) && (
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="hud-label">Trajectory</span>
+              <span className="hud-label">Trajectory <span className="normal-case tracking-normal">(direction)</span></span>
               <div className="inline-flex flex-wrap border divide-x">
                 {directionOptions.filter(o => o.show).map((option) => (
                   <button
@@ -241,8 +263,8 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
           ) : (
             <div>
               <div className="hidden sm:grid grid-cols-[1fr_auto] gap-4 px-4 pb-2">
-                <span className="hud-label">Booster · Destination</span>
-                <span className="hud-label text-right">T-minus · ETA</span>
+                <span className="hud-label">Booster (train) · Destination</span>
+                <span className="hud-label text-right">T-minus (min away) · ETA</span>
               </div>
               <ol className="space-y-2">
                 {displayedArrivals.map((arrival, index) => {
@@ -279,7 +301,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                             </div>
                           )}
                           <div className="font-semibold truncate">
-                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? '↑' : '↓'} </span>
+                            <span className="text-muted-foreground font-normal">{arrival.direction === 'N' ? '↑' : '↓'} {getDirectionName(arrival.direction)} · </span>
                             {arrival.destination}
                           </div>
                           {arrival.trainId && (
@@ -302,6 +324,7 @@ export function StationCard({ stationId, arrivals, alerts, direction, onDirectio
                           >
                             <span className="text-muted-foreground font-medium text-base mr-1">T−</span>
                             {formatCountdown(secondsLeft)}
+                            <span className="ml-1.5 text-muted-foreground font-medium text-xs uppercase tracking-wider">min away</span>
                           </div>
                         )}
                         <div className="font-mono text-xs text-muted-foreground mt-0.5">
