@@ -46,13 +46,6 @@ export function getSouthboundRoutesForStation(stopId: string): Route[] {
   return stationToRoutes[stopId]?.southboundRoutes || [];
 }
 
-export function searchStationsByName(query: string): StationWithRoutes[] {
-  const lowerQuery = query.toLowerCase();
-  return allStationsWithRoutes.filter((s) =>
-    s.station.name.toLowerCase().includes(lowerQuery)
-  );
-}
-
 export const ROUTE_LINE_COLORS: Record<string, string> = {
   A: "0062CF",
   C: "0062CF",

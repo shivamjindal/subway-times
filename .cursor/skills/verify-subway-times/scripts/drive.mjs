@@ -27,7 +27,7 @@ const out = arg('--out', path.join(process.env.EVIDENCE_ROOT ?? '/opt/cursor/art
 const CHROME = process.env.CHROME_BIN ?? 'google-chrome';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const JOURNEYS = { ready, map, search, closeup, 'card-closeup': cardCloseup, feedback };
+const JOURNEYS = { ready, map, search, 'search-shots': searchShots, closeup, 'card-closeup': cardCloseup, feedback };
 if (!JOURNEYS[journey]) {
   console.error(`usage: drive.mjs <${Object.keys(JOURNEYS).join('|')}> [--port N] [--out DIR]`);
   process.exit(2);
@@ -264,6 +264,24 @@ async function search() {
   await click('remove Times Sq chip', '[aria-label="Remove Times Sq-42 St"]');
   await waitFor('chip removed', `!document.querySelector('[aria-label="Remove Times Sq-42 St"]')`);
   check('removing the chip untracks it', !/"127"/.test((await evaluate(`localStorage.getItem('selectedStations')`)) ?? ''));
+}
+
+/** Screenshots of the suggestion list for each query in SHOT_QUERIES ("tag=query;tag=query"). */
+async function searchShots() {
+  const queries = (process.env.SHOT_QUERIES ?? 'times=Times Sq').split(';').map((q) => q.split('='));
+  await goto('/');
+  await evaluate(`localStorage.removeItem('selectedStations'); true`);
+  await goto('/');
+  await waitFor('search box', `document.querySelector('#station-search')`);
+  for (const [tag, query] of queries) {
+    await click('station search', '#station-search');
+    await evaluate(`document.querySelector('#station-search').select(); true`);
+    await type(query);
+    await sleep(600);
+    await evaluate(`document.querySelector('#station-search').scrollIntoView({ block: 'start' }); window.scrollBy(0, -40); true`);
+    await sleep(300);
+    await shot(`search-${tag}`);
+  }
 }
 
 async function closeup() {
