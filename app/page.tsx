@@ -26,7 +26,7 @@ function MissionClock() {
         <div className="mt-1 text-foreground">{now ? format(now, 'America/New_York') : '--:--:--'}</div>
       </div>
       <div className="text-right">
-        <div className="hud-label">UTC</div>
+        <div className="hud-label" title="Coordinated Universal Time, the mission-wide reference clock">UTC · Universal time</div>
         <div className="mt-1 text-muted-foreground">{now ? format(now, 'UTC') : '--:--:--'}</div>
       </div>
     </div>

@@ -319,7 +319,7 @@ export function OrbitalMapPanel({ savedStationIds, arrivals, onTrackStation, ref
             />
 
             <div>
-              <div className="hud-label mb-2">Tracked spaceports</div>
+              <div className="hud-label mb-2">Tracked spaceports <span className="normal-case tracking-normal">(stations)</span></div>
               {savedStationIds.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Track a spaceport to pin a beacon on the network.</p>
               ) : (
